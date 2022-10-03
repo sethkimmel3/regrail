@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  webserver:
+    image: nginx
+    container_name: webserver
+    volumes:
+     - ./frontend/:/usr/share/nginx/html
+    ports:
+     - 8080:80
+    networks:
+     - app-network
+
+networks:
+  app-network:
+    driver: bridge

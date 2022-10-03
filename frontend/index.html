@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script src="https://unpkg.com/konva@8.3.12/konva.min.js"></script>
+    <title>ReGrail</title>
+    <style>
+      .grid-container {
+        height: 100vh;
+        width: 100vw;
+        align-content: center;
+        display: grid;
+        grid-template-columns: 25% 50% 25%;
+        grid-template-rows: 50% 50%;
+        column-gap: 50px;
+        row-gap: 50px;
+      }
+      .grid-item {
+        width: 100px;
+        height: 100px;
+      }
+      .blocks {
+          /* width: 25vw; */
+          /* height: 100vh; */
+          background-color: teal;
+          grid-column-start: 1 / 2;
+      }
+      }
+    </style>
+  </head>
+  <body>
+  <div class="grid-container" style="display: grid;">
+    <div class="blocks" class="grid-item"></div>
+    <div id="sources" class="grid-item"></div>
+    <div id="flow" class="grid-item"></div>
+  </div>
+	<script>
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+
+    var stage = new Konva.Stage({
+      container: 'sources',
+      width: width,
+      height: height,
+    });
+
+    var layer = new Konva.Layer();
+    var rectX = stage.width() / 2 - 150;
+    var rectY = stage.height() / 2 - 125;
+
+    var box = new Konva.Rect({
+      x: rectX,
+      y: rectY,
+      width: 100,
+      height: 50,
+      fill: '#00D2FF',
+      stroke: 'black',
+      strokeWidth: 4,
+      draggable: true,
+    });
+
+    // add cursor styling
+    box.on('mouseover', function () {
+      document.body.style.cursor = 'pointer';
+    });
+    box.on('mouseout', function () {
+      document.body.style.cursor = 'default';
+    });
+
+    layer.add(box);
+    stage.add(layer);
+  </script>
+  </body>
+</html>
