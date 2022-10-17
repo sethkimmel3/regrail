@@ -5,72 +5,305 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <script src="https://unpkg.com/konva@8.3.12/konva.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
     <title>ReGrail</title>
     <style>
-      .grid-container {
-        height: 100vh;
-        width: 100vw;
-        align-content: center;
-        display: grid;
-        grid-template-columns: 25% 50% 25%;
-        grid-template-rows: 50% 50%;
-        column-gap: 50px;
-        row-gap: 50px;
-      }
-      .grid-item {
-        width: 100px;
-        height: 100px;
-      }
-      .blocks {
-          /* width: 25vw; */
-          /* height: 100vh; */
-          background-color: teal;
-          grid-column-start: 1 / 2;
-      }
-      }
     </style>
   </head>
   <body>
-  <div class="grid-container" style="display: grid;">
-    <div class="blocks" class="grid-item"></div>
-    <div id="sources" class="grid-item"></div>
-    <div id="flow" class="grid-item"></div>
+  <div>
+    <div id="block-select-container" style="position:absolute;top:5px;left:5px;z-index:2">
+      <label for="block-select">New Block:</label>
+      <select name="block-select" id="block-select">
+        <option value="data-source">Data Source</option>
+        <option value="join">Join</option>
+      </select>
+      <!-- These will not be harcoded in the future, obviously. -->
+      <select name="data-select" id="data-select">
+        <option value="airtravel.csv">airtravel.csv</option>
+        <option value="cities.csv">cities.csv</option>
+        <option value="grades.csv">grades.csv</option>
+        <option value="hurricanes.csv">hurricanes.csv</option>
+        <option value="zillow.csv">zillow.csv</option>
+      </select>
+      <button id="add-block" type="button">Add</button>
+    </div>
+    <div id="flow"></div>
   </div>
 	<script>
-    var width = window.innerWidth;
-    var height = window.innerHeight;
+    $( document ).ready(function(){
+      var width = window.innerWidth;
+      var height = window.innerHeight;
 
-    var stage = new Konva.Stage({
-      container: 'sources',
-      width: width,
-      height: height,
-    });
+      $( document ).on('change', '#block-select', function(){
+        var select_value = $('#block-select').val();
+        if (select_value == 'data-source'){
+          $('#data-select').show();
+        } else {
+          $('#data-select').hide();
+        }
+      })
 
-    var layer = new Konva.Layer();
-    var rectX = stage.width() / 2 - 150;
-    var rectY = stage.height() / 2 - 125;
+      var stage = new Konva.Stage({
+        container: 'flow',
+        width: width,
+        height: height,
+      });
 
-    var box = new Konva.Rect({
-      x: rectX,
-      y: rectY,
-      width: 100,
-      height: 50,
-      fill: '#00D2FF',
-      stroke: 'black',
-      strokeWidth: 4,
-      draggable: true,
-    });
+      var blocks = {};
+      var connections = {};
+      edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
 
-    // add cursor styling
-    box.on('mouseover', function () {
-      document.body.style.cursor = 'pointer';
-    });
-    box.on('mouseout', function () {
-      document.body.style.cursor = 'default';
-    });
+      $.fn.blockFactory = function(type, source=null){
+        var block_id = "block-" + Math.random().toString(16).slice(2);
 
-    layer.add(box);
-    stage.add(layer);
+        var layer = new Konva.Layer({
+          draggable: true,
+          id: block_id
+        });
+
+        // var rectX = stage.width() / 2 ;
+        // var rectY = stage.height() / 2 ;
+        var rectX = 50;
+        var rectY = 50;
+
+        var box = new Konva.Rect({
+          x: rectX,
+          y: rectY,
+          width: 100,
+          height: 50,
+          fill: '#00D2FF',
+          stroke: 'black',
+          strokeWidth: 4,
+          name: 'block'
+        });
+
+        var x_circle = new Konva.Circle({
+          radius: 10,
+          x: rectX,
+          y: rectY,
+          fill: 'red',
+          stroke: 'black'
+        });
+
+        var x_text = new Konva.Text({
+          text: 'X',
+          x: rectX - 4,
+          y: rectY - 4
+        });
+
+        var edge_circle = new Konva.Circle({
+          radius: 10,
+          x: rectX + 50,
+          y: rectY + 50,
+          fill: 'green',
+          stroke: 'black',
+          name: 'edge_circle'
+        });
+
+        var edge_text = new Konva.Text({
+          text: '+',
+          x: rectX + 47,
+          y: rectY + 46,
+          name: 'edge_text'
+        });
+
+        var block_text = new Konva.Text({
+          text: type=='data-source' ? source : type,
+          x: rectX + 18,
+          y: rectY + 20,
+        });
+
+        // add cursor styling
+        layer.on('mouseover', function () {
+          document.body.style.cursor = 'pointer';
+        });
+        layer.on('mouseout', function () {
+          document.body.style.cursor = 'default';
+        });
+
+        layer.on('dragend', function() {
+          $.fn.reRenderConnections(block_id);
+        })
+
+        x_circle.on('click', function (){
+          layer.destroy();
+          document.body.style.cursor = 'default';
+        });
+
+        x_text.on('click', function (){
+          layer.destroy();
+          document.body.style.cursor = 'default';
+        });
+
+        layer.add(box);
+        layer.add(x_circle);
+        layer.add(x_text);
+        layer.add(edge_circle);
+        layer.add(edge_text);
+        layer.add(block_text);
+
+        return layer;
+      }
+
+      var drawing_connection = false;
+      var from_block = null;
+      var line_layer;
+      var line;
+
+      $.fn.startDrawingConnection = function(edge_circle){
+        var connector_id = "connector-" + Math.random().toString(16).slice(2);
+
+        line_layer = new Konva.Layer({
+          draggable: false,
+          id: connector_id
+        });
+
+        drawing_connection = true;
+        from_block = edge_circle.parent.attrs.id;
+
+        const pos = stage.getPointerPosition();
+
+        line = new Konva.Arrow({
+          stroke: 'black',
+          listening: false,
+          points: [edge_circle.absolutePosition().x, edge_circle.absolutePosition().y, pos.x, pos.y],
+          name: 'line'
+        });
+
+        line_layer.add(line);
+
+        stage.add(line_layer);
+      }
+
+      $.fn.stopDrawingConnection = function(box){
+        if(!drawing_connection){
+          return;
+        }
+
+        var connector_id = line_layer.attrs.id
+        var to_block = box.parent.attrs.id;
+        var edge = {'from':from_block, 'to':to_block, 'connector': connector_id};
+
+        let found = 0;
+        for (const edge of edges) {
+          if (edge['from'] == from_block && edge['to'] == to_block){
+            found = 1;
+          }
+        }
+
+        if(!found){
+          edges.push(edge);
+
+          const points = line.points().slice();
+          points[2] = box.absolutePosition().x + box.attrs.width / 2;
+          points[3] = box.absolutePosition().y;
+          line.points(points);
+          line_layer.batchDraw();
+
+          connections[connector_id] = line_layer;
+        } else {
+          line.destroy();
+          line_layer.draw();
+          line = null;
+          line_layer = null;
+        }
+
+        console.log(edges);
+
+        drawing_connection = false;
+        from_block = null;
+      }
+
+      $.fn.reRenderConnection = (edge) => {
+        let from_x;
+        let from_y;
+        for(const child of blocks[edge['from']].children){
+          if (child.attrs.name == 'edge_circle'){
+            from_x = child.absolutePosition().x;
+            from_y = child.absolutePosition().y;
+          }
+        }
+
+        let to_x;
+        let to_y;
+        for(const child of blocks[edge['to']].children){
+          if (child.attrs.name == 'block'){
+            to_x = child.absolutePosition().x + child.attrs.width / 2;
+            to_y = child.absolutePosition().y;
+          }
+        }
+
+        for(const child of connections[edge['connector']].children){
+          if (child.attrs.name == 'line'){
+            child.points([from_x, from_y, to_x, to_y]);
+          }
+        }
+        connections[edge['connector']].batchDraw();
+      }
+
+      $.fn.reRenderConnections = (block_id) => {
+        for (const edge of edges) {
+          if (edge['from'] == block_id || edge['to'] == block_id){
+            $.fn.reRenderConnection(edge);
+          }
+        }
+      }
+
+      stage.on('mousemove', (e) => {
+        if (!drawing_connection){
+          return;
+        }
+        const pos = stage.getPointerPosition();
+        const points = line.points().slice();
+        points[2] = pos.x;
+        points[3] = pos.y;
+        line.points(points);
+        line_layer.batchDraw();
+      });
+
+      stage.on('mousedown', (e) => {
+        if (!drawing_connection && (e.target.hasName('edge_circle') || e.target.hasName('edge_text'))) {
+          var target = e.target;
+          if (e.target.hasName('edge_text')){
+            for(const child of e.target.parent.children){
+              if (child.attrs.name == 'edge_circle'){
+                target = child;
+              }
+            }
+          }
+          $.fn.startDrawingConnection(target);
+        }
+        else if (drawing_connection && e.target.hasName('block')){
+          $.fn.stopDrawingConnection(e.target);
+        }
+        else if (drawing_connection) {
+          line.destroy();
+          line_layer.draw();
+          line = null;
+          line_layer = null;
+          drawing_connection = false;
+          from_block = null;
+        }
+      })
+
+      $( document ).on('click', '#add-block', function(){
+        var block_type = $('#block-select').val();
+        if (block_type == 'data-source'){
+          var data_source = $('#data-select').val();
+        } else {
+          var data_source = null;
+        }
+
+        var block = $.fn.blockFactory(block_type, data_source);
+        var id = block.attrs.id;
+        blocks[id] = block;
+        stage.add(block);
+      });
+
+      $( '#add-block' ).click();
+  });
   </script>
   </body>
 </html>
