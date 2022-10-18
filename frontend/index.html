@@ -7,8 +7,14 @@
     <script src="https://unpkg.com/konva@8.3.12/konva.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <!-- PapaParse -->
+    <script src="scripts/papaparse.min.js"></script>
     <title>ReGrail</title>
     <style>
+      table, th, td {
+        border: 1px solid black;
+        border-collapse: collapse;
+      }
     </style>
   </head>
   <body>
@@ -20,16 +26,13 @@
         <option value="join">Join</option>
       </select>
       <!-- These will not be harcoded in the future, obviously. -->
-      <select name="data-select" id="data-select">
-        <option value="airtravel.csv">airtravel.csv</option>
-        <option value="cities.csv">cities.csv</option>
-        <option value="grades.csv">grades.csv</option>
-        <option value="hurricanes.csv">hurricanes.csv</option>
-        <option value="zillow.csv">zillow.csv</option>
-      </select>
+      <input type="file" name="data-select" id="data-select" />
       <button id="add-block" type="button">Add</button>
     </div>
+
     <div id="flow"></div>
+
+    <table id="data-table" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;top:0px;right:0px;"></table>
   </div>
 	<script>
     $( document ).ready(function(){
@@ -54,6 +57,7 @@
       var blocks = {};
       var connections = {};
       edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
+      var block_data = {}; // convention: {header: Array(...), data: Array(Array()...Array())}
 
       $.fn.blockFactory = function(type, source=null){
         var block_id = "block-" + Math.random().toString(16).slice(2);
@@ -76,7 +80,7 @@
           fill: '#00D2FF',
           stroke: 'black',
           strokeWidth: 4,
-          name: 'block'
+          name: 'box'
         });
 
         var x_circle = new Konva.Circle({
@@ -110,9 +114,10 @@
         });
 
         var block_text = new Konva.Text({
-          text: type=='data-source' ? source : type,
+          text: type=='data-source' ? source.split('\\')[source.split('\\').length - 1] : type,
           x: rectX + 18,
           y: rectY + 20,
+          name: 'box_text'
         });
 
         // add cursor styling
@@ -149,6 +154,8 @@
       var from_block = null;
       var line_layer;
       var line;
+
+      var selected_block_id = null;
 
       $.fn.startDrawingConnection = function(edge_circle){
         var connector_id = "connector-" + Math.random().toString(16).slice(2);
@@ -207,6 +214,7 @@
           line = null;
           line_layer = null;
         }
+        // TODO: handle cycles
 
         drawing_connection = false;
         from_block = null;
@@ -225,7 +233,7 @@
         let to_x;
         let to_y;
         for(const child of blocks[edge['to']].children){
-          if (child.attrs.name == 'block'){
+          if (child.attrs.name == 'box'){
             to_x = child.absolutePosition().x + child.attrs.width / 2;
             to_y = child.absolutePosition().y;
           }
@@ -259,7 +267,7 @@
         line_layer.batchDraw();
       });
 
-      stage.on('mousedown', (e) => {
+      stage.on('click', (e) => {
         if (!drawing_connection && (e.target.hasName('edge_circle') || e.target.hasName('edge_text'))) {
           var target = e.target;
           if (e.target.hasName('edge_text')){
@@ -271,7 +279,7 @@
           }
           $.fn.startDrawingConnection(target);
         }
-        else if (drawing_connection && e.target.hasName('block')){
+        else if (drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text'))){
           $.fn.stopDrawingConnection(e.target);
         }
         else if (drawing_connection) {
@@ -282,20 +290,45 @@
           drawing_connection = false;
           from_block = null;
         }
+        else if (!drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text')) && !e.target.hasName('edge_circle') && !e.target.hasName('edge_text')){
+          $.fn.toggleSelectedBlock(e.target.parent);
+        }
       })
 
       $( document ).on('click', '#add-block', function(){
         var block_type = $('#block-select').val();
         if (block_type == 'data-source'){
           var data_source = $('#data-select').val();
+
+          if (data_source == undefined || data_source == ""){
+            window.alert("You must select a data source.")
+          }
+          else{
+            var block = $.fn.blockFactory(block_type, data_source);
+            var id = block.attrs.id;
+            blocks[id] = block;
+            stage.add(block);
+
+            var file = document.getElementById('data-select').files[0];
+
+            var d = Papa.parse(file, {
+              header: true,
+              download: true,
+              dynamicTyping: true,
+              complete: function(results){
+                $.fn.assignDataToBlock(id, results.meta.fields, results.data);
+                // $.fn.populateTable(results.meta.fields, results.data);
+              }
+            });
+          }
         } else {
           var data_source = null;
-        }
 
-        var block = $.fn.blockFactory(block_type, data_source);
-        var id = block.attrs.id;
-        blocks[id] = block;
-        stage.add(block);
+          var block = $.fn.blockFactory(block_type, data_source);
+          var id = block.attrs.id;
+          blocks[block.attrs.id] = block;
+          stage.add(block);
+        }
       });
 
       $.fn.removeBlock = (block) => {
@@ -321,7 +354,64 @@
         document.body.style.cursor = 'default';
       }
 
-      $( '#add-block' ).click();
+      $.fn.assignDataToBlock = (block_id, header, data) => {
+        block_data[block_id] = {"header": header, "data": data};
+      }
+
+      $.fn.populateTable = (header, data) => {
+        document.getElementById('data-table').replaceChildren();
+        var headerRow = document.createElement('tr');
+        for (const item of header){
+          var cell = document.createElement('th');
+          cell.innerHTML = item;
+          headerRow.appendChild(cell);
+        }
+        document.getElementById('data-table').appendChild(headerRow);
+
+        for (const row of data){
+          var tableRow = document.createElement('tr');
+          for (const item of Object.values(row)){
+            var cell = document.createElement('td');
+            cell.innerHTML = item;
+            tableRow.append(cell);
+          }
+          document.getElementById('data-table').appendChild(tableRow);
+        }
+      }
+
+      $.fn.clearTable = () => {
+        document.getElementById('data-table').replaceChildren();
+      }
+
+      // $( '#add-block' ).click();
+
+      $.fn.setBlockStroke = function(block_id, color){
+        for (const child of blocks[block_id].children){
+          if (child.attrs.name == 'box'){
+            console.log(child);
+            child.stroke(color);
+          }
+        }
+      }
+
+      $.fn.toggleSelectedBlock = function(block) {
+        console.log(selected_block_id);
+        console.log(blocks);
+        if (selected_block_id != block.attrs.id){
+          if (selected_block_id != null){
+            $.fn.setBlockStroke(selected_block_id, 'black');
+          }
+          $.fn.setBlockStroke(block.attrs.id, 'yellow');
+          selected_block_id = block.attrs.id;
+          $.fn.populateTable(block_data[block.attrs.id]['header'], block_data[block.attrs.id]['data'])
+        }
+        else {
+          $.fn.setBlockStroke(block.attrs.id, 'black');
+          selected_block_id = null;
+          $.fn.clearTable();
+        }
+      }
+
   });
   </script>
   </body>
