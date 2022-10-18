@@ -127,14 +127,12 @@
           $.fn.reRenderConnections(block_id);
         })
 
-        x_circle.on('click', function (){
-          layer.destroy();
-          document.body.style.cursor = 'default';
+        x_circle.on('click', function () {
+          $.fn.removeBlock(layer);
         });
 
-        x_text.on('click', function (){
-          layer.destroy();
-          document.body.style.cursor = 'default';
+        x_text.on('click', function () {
+          $.fn.removeBlock(layer);
         });
 
         layer.add(box);
@@ -209,8 +207,6 @@
           line = null;
           line_layer = null;
         }
-
-        console.log(edges);
 
         drawing_connection = false;
         from_block = null;
@@ -301,6 +297,29 @@
         blocks[id] = block;
         stage.add(block);
       });
+
+      $.fn.removeBlock = (block) => {
+        var indices_to_remove = [];
+        var index = 0;
+        // first loop through the edges to destroy the connector and track
+        // which edges to remove from the array
+        for (const edge of edges){
+          if (edge['to'] == block.attrs.id || edge['from'] == block.attrs.id){
+            connections[edge['connector']].destroy();
+            delete connections[edge['connector']];
+            indices_to_remove.push(index);
+          }
+          index += 1;
+        }
+        for (var i = indices_to_remove.length - 1; i >= 0; i--) {
+          edges.splice(indices_to_remove[i], 1);
+        }
+
+        // now remove the block
+        block.destroy();
+        delete blocks[block.attrs.id];
+        document.body.style.cursor = 'default';
+      }
 
       $( '#add-block' ).click();
   });
