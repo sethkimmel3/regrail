@@ -61,22 +61,20 @@
       var edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
       var block_data = {}; // convention: {type: source/join/etc., properties: {},  header: Array(...), data: Array(Array()...Array())}
 
-      $.fn.blockFactory = function(box_text){
+      $.fn.blockFactory = function(){
         var block_id = "block-" + Math.random().toString(16).slice(2);
 
-        var layer = new Konva.Layer({
-          draggable: true,
-          id: block_id
-        });
-
-        // var rectX = stage.width() / 2 ;
-        // var rectY = stage.height() / 2 ;
         var rectX = 50;
         var rectY = 50;
 
-        var box = new Konva.Rect({
+        var layer = new Konva.Layer({
+          draggable: true,
+          id: block_id,
           x: rectX,
-          y: rectY,
+          y: rectY
+        });
+
+        var box = new Konva.Rect({
           width: 100,
           height: 50,
           fill: '#00D2FF',
@@ -85,24 +83,27 @@
           name: 'box'
         });
 
+        var box_text = new Konva.Text({
+          // text: box_text,
+          name: 'box_text'
+        });
+
         var x_circle = new Konva.Circle({
           radius: 10,
-          x: rectX,
-          y: rectY,
           fill: 'red',
           stroke: 'black'
         });
 
         var x_text = new Konva.Text({
           text: 'X',
-          x: rectX - 4,
-          y: rectY - 4
+          x: - 4,
+          y: - 4
         });
 
         var edge_circle = new Konva.Circle({
           radius: 10,
-          x: rectX + 50,
-          y: rectY + 50,
+          x: box.width() / 2,
+          y: box.height(),
           fill: 'green',
           stroke: 'black',
           name: 'edge_circle'
@@ -110,16 +111,9 @@
 
         var edge_text = new Konva.Text({
           text: '+',
-          x: rectX + 47,
-          y: rectY + 46,
+          x: (box.width() / 2) - 3,
+          y: box.height() - 4,
           name: 'edge_text'
-        });
-
-        var block_text = new Konva.Text({
-          text: box_text,
-          x: rectX + 18,
-          y: rectY + 20,
-          name: 'box_text'
         });
 
         // add cursor styling
@@ -147,7 +141,7 @@
         layer.add(x_text);
         layer.add(edge_circle);
         layer.add(edge_text);
-        layer.add(block_text);
+        layer.add(box_text);
 
         return layer;
       }
@@ -307,11 +301,13 @@
             window.alert("You must select a data source.")
           }
           else{
-            var box_text = data_source.split('\\')[data_source.split('\\').length - 1];
-            var block = $.fn.blockFactory(box_text);
+            var block = $.fn.blockFactory();
             blocks[block.attrs.id] = block;
             stage.add(block);
             block_data[block.attrs.id] = {'type': 'data-source', 'properties': {}, 'header': null, 'data': null};
+
+            var box_text = data_source.split('\\')[data_source.split('\\').length - 1];
+            $.fn.updateBlockText(block.attrs.id, box_text);
 
             var file = document.getElementById('data-select').files[0];
 
@@ -329,10 +325,13 @@
         else if (block_type == 'join'){
           var data_source = null;
 
-          var box_text = 'join';
-          var block = $.fn.blockFactory(box_text);
+          var block = $.fn.blockFactory();
           blocks[block.attrs.id] = block;
           stage.add(block);
+
+          var box_text = 'join';
+          $.fn.updateBlockText(block.attrs.id, box_text);
+
           block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'header': null, 'data': null};
         }
       });
@@ -364,6 +363,42 @@
         delete blocks[block.attrs.id];
         delete block_data[block.attrs.id];
         document.body.style.cursor = 'default';
+      }
+
+      $.fn.updateBlockText = (block_id, text) => {
+        for (const child of blocks[block_id].children) {
+          if (child.attrs.name == 'box_text') {
+            child.text(text);
+          }
+        }
+        $.fn.centerBlockText(block_id);
+      }
+
+      $.fn.centerBlockText = (block_id) => {
+        var box_width;
+        var box_height;
+        var text_width;
+        var text_height;
+        for (const child of blocks[block_id].children) {
+          if (child.attrs.name == 'box') {
+            box_width = child.attrs.width;
+            box_height = child.attrs.height;
+          }
+          if (child.attrs.name == 'box_text') {
+            text_width = child.textWidth;
+            text_height = child.textHeight;
+          }
+        }
+
+        var new_x = (box_width - text_width) / 2;
+        var new_y = (box_height - text_height) / 2;
+
+        for (const child of blocks[block_id].children) {
+          if (child.attrs.name == 'box_text') {
+            child.x(new_x);
+            child.y(new_y);
+          }
+        }
       }
 
       $.fn.populateTable = (header, data) => {
@@ -419,56 +454,135 @@
         switch (type) {
           case 'join':
             var parents = $.fn.getBlockParents(block_id);
-
-            // TODO: error if parents.length != 2
-            var left_block_select_label = document.createElement('label');
-            left_block_select_label.innerHTML = 'Left Select: ';
-
-            var left_block_select = document.createElement('select');
-            var left_block_select_option_1 = document.createElement('option');
-            left_block_select_option_1.value = parents[0];
-            left_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
-            var left_block_select_option_2 = document.createElement('option');
-            left_block_select_option_2.value = parents[1];
-            left_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
-            left_block_select.appendChild(left_block_select_option_1);
-            left_block_select.appendChild(left_block_select_option_2);
-
-            document.getElementById('transform_props').appendChild(left_block_select_label);
-            document.getElementById('transform_props').appendChild(left_block_select);
-            document.getElementById('transform_props').appendChild(document.createElement('BR'));
-
-            var right_block_select_label = document.createElement('label');
-            right_block_select_label.innerHTML = 'Right Select: ';
-
-            var right_block_select = document.createElement('select');
-            var right_block_select_option_1 = document.createElement('option');
-            right_block_select_option_1.value = parents[0];
-            right_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
-            var right_block_select_option_2 = document.createElement('option');
-            right_block_select_option_2.value = parents[1];
-            right_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
-            right_block_select.appendChild(right_block_select_option_1);
-            right_block_select.appendChild(right_block_select_option_2);
-
-            document.getElementById('transform_props').appendChild(right_block_select_label);
-            document.getElementById('transform_props').appendChild(right_block_select);
-            document.getElementById('transform_props').appendChild(document.createElement('BR'));
-
-            var left_key_select_label = document.createElement('label');
-            left_key_select_label.innerHTML = 'Left Key: ';
-
-            var left_key_select = document.createElement('select');
-            for (const header_item of block_data[left_block_select.value]['header']){
-              var left_key_select_option = document.createElement('option');
-              left_key_select_option.value = header_item;
-              left_key_select_option.innerHTML = header_item;
-              left_key_select.appendChild(left_key_select_option);
+            if (parents.length != 2){
+              window.alert('Joins must have two parents!')
             }
+            else {
+              // TODO: error if parents.length != 2
+              var left_block_select_label = document.createElement('label');
+              left_block_select_label.innerHTML = 'Left Table: ';
 
-            document.getElementById('transform_props').appendChild(left_key_select_label);
-            document.getElementById('transform_props').appendChild(left_key_select);
-            document.getElementById('transform_props').appendChild(document.createElement('BR'));
+              var left_block_select = document.createElement('select');
+              var left_block_select_option_1 = document.createElement('option');
+              left_block_select_option_1.value = parents[0];
+              left_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
+              var left_block_select_option_2 = document.createElement('option');
+              left_block_select_option_2.value = parents[1];
+              left_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
+              left_block_select.appendChild(left_block_select_option_1);
+              left_block_select.appendChild(left_block_select_option_2);
+
+              document.getElementById('transform_props').appendChild(left_block_select_label);
+              document.getElementById('transform_props').appendChild(left_block_select);
+              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+              var right_block_select_label = document.createElement('label');
+              right_block_select_label.innerHTML = 'Right Table: ';
+
+              var right_block_select = document.createElement('select');
+              var right_block_select_option_1 = document.createElement('option');
+              right_block_select_option_1.value = parents[0];
+              right_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
+              var right_block_select_option_2 = document.createElement('option');
+              right_block_select_option_2.value = parents[1];
+              right_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
+              right_block_select.appendChild(right_block_select_option_1);
+              right_block_select.appendChild(right_block_select_option_2);
+
+              document.getElementById('transform_props').appendChild(right_block_select_label);
+              document.getElementById('transform_props').appendChild(right_block_select);
+              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+              var left_key_select_label = document.createElement('label');
+              left_key_select_label.innerHTML = 'Left Key: ';
+
+              var left_key_select = document.createElement('select');
+              for (const header_item of block_data[left_block_select.value]['header']){
+                var left_key_select_option = document.createElement('option');
+                left_key_select_option.value = header_item;
+                left_key_select_option.innerHTML = header_item;
+                left_key_select.appendChild(left_key_select_option);
+              }
+
+              left_block_select.addEventListener('change', function(){
+                left_key_select.replaceChildren();
+                for (const header_item of block_data[left_block_select.value]['header']){
+                  var left_key_select_option = document.createElement('option');
+                  left_key_select_option.value = header_item;
+                  left_key_select_option.innerHTML = header_item;
+                  left_key_select.appendChild(left_key_select_option);
+                }
+              });
+
+              document.getElementById('transform_props').appendChild(left_key_select_label);
+              document.getElementById('transform_props').appendChild(left_key_select);
+              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+              var right_key_select_label = document.createElement('label');
+              right_key_select_label.innerHTML = 'Right Key: ';
+
+              var right_key_select = document.createElement('select');
+              for (const header_item of block_data[right_block_select.value]['header']){
+                var right_key_select_option = document.createElement('option');
+                right_key_select_option.value = header_item;
+                right_key_select_option.innerHTML = header_item;
+                right_key_select.appendChild(right_key_select_option);
+              }
+
+              right_block_select.addEventListener('change', function(){
+                right_key_select.replaceChildren();
+                for (const header_item of block_data[right_block_select.value]['header']){
+                  var right_key_select_option = document.createElement('option');
+                  right_key_select_option.value = header_item;
+                  right_key_select_option.innerHTML = header_item;
+                  right_key_select.appendChild(right_key_select_option);
+                }
+              });
+
+              document.getElementById('transform_props').appendChild(right_key_select_label);
+              document.getElementById('transform_props').appendChild(right_key_select);
+              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+              var method_select_label = document.createElement('label');
+              method_select_label.innerHTML = 'Method: ';
+
+              var method_select = document.createElement('select');
+              var method_option_left = document.createElement('option');
+              method_option_left.value = 'left';
+              method_option_left.innerHTML = 'left';
+              var method_option_right = document.createElement('option');
+              method_option_right.value = 'right';
+              method_option_right.innerHTML = 'right';
+              var method_option_outer = document.createElement('option');
+              method_option_right.value = 'outer';
+              method_option_outer.innerHTML = 'outer';
+              var method_option_inner = document.createElement('option');
+              method_option_inner.value = 'inner';
+              method_option_inner.innerHTML = 'inner';
+
+              method_select.appendChild(method_option_left);
+              method_select.appendChild(method_option_right);
+              method_select.appendChild(method_option_outer);
+              method_select.appendChild(method_option_inner);
+
+              document.getElementById('transform_props').appendChild(method_select_label);
+              document.getElementById('transform_props').appendChild(method_select);
+              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+              var update_props_button = document.createElement('button');
+              update_props_button.innerHTML = 'Update Properties';
+              update_props_button.addEventListener('click', function(){
+                block_data[block_id]['properties'] = {
+                  'left_block': left_block_select.value,
+                  'right_block': right_block_select.value,
+                  'left_key': left_key_select.value,
+                  'right_key': right_key_select.value,
+                  'method': method_select.value
+                }
+              });
+
+              document.getElementById('transform_props').appendChild(update_props_button);
+            }
         }
       }
 
