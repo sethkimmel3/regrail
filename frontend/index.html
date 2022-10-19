@@ -391,10 +391,85 @@
         document.getElementById('data-table').replaceChildren();
       }
 
+      $.fn.getBlockParents = (block_id) => {
+        var parents = [];
+        for (const edge of edges) {
+          if (edge['to'] == block_id) {
+            if (!parents.includes(edge['from'])) {
+              parents.push(edge['from']);
+            }
+          }
+        }
+        return parents;
+      }
+
+      $.fn.getBlockName = (block_id) => {
+        for (const child of blocks[block_id].children) {
+          if (child.attrs.name == 'box_text') {
+            return child.attrs.text;
+          }
+        }
+      }
+
       $.fn.showBlockProps = (block_id) => {
+        document.getElementById('transform_props').replaceChildren();
         var type = block_data[block_id]['type'];
 
         // TODO: Dynamically build config picker here
+        switch (type) {
+          case 'join':
+            var parents = $.fn.getBlockParents(block_id);
+
+            // TODO: error if parents.length != 2
+            var left_block_select_label = document.createElement('label');
+            left_block_select_label.innerHTML = 'Left Select: ';
+
+            var left_block_select = document.createElement('select');
+            var left_block_select_option_1 = document.createElement('option');
+            left_block_select_option_1.value = parents[0];
+            left_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
+            var left_block_select_option_2 = document.createElement('option');
+            left_block_select_option_2.value = parents[1];
+            left_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
+            left_block_select.appendChild(left_block_select_option_1);
+            left_block_select.appendChild(left_block_select_option_2);
+
+            document.getElementById('transform_props').appendChild(left_block_select_label);
+            document.getElementById('transform_props').appendChild(left_block_select);
+            document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+            var right_block_select_label = document.createElement('label');
+            right_block_select_label.innerHTML = 'Right Select: ';
+
+            var right_block_select = document.createElement('select');
+            var right_block_select_option_1 = document.createElement('option');
+            right_block_select_option_1.value = parents[0];
+            right_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
+            var right_block_select_option_2 = document.createElement('option');
+            right_block_select_option_2.value = parents[1];
+            right_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
+            right_block_select.appendChild(right_block_select_option_1);
+            right_block_select.appendChild(right_block_select_option_2);
+
+            document.getElementById('transform_props').appendChild(right_block_select_label);
+            document.getElementById('transform_props').appendChild(right_block_select);
+            document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+            var left_key_select_label = document.createElement('label');
+            left_key_select_label.innerHTML = 'Left Key: ';
+
+            var left_key_select = document.createElement('select');
+            for (const header_item of block_data[left_block_select.value]['header']){
+              var left_key_select_option = document.createElement('option');
+              left_key_select_option.value = header_item;
+              left_key_select_option.innerHTML = header_item;
+              left_key_select.appendChild(left_key_select_option);
+            }
+
+            document.getElementById('transform_props').appendChild(left_key_select_label);
+            document.getElementById('transform_props').appendChild(left_key_select);
+            document.getElementById('transform_props').appendChild(document.createElement('BR'));
+        }
       }
 
       // $( '#add-block' ).click();
