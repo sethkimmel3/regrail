@@ -83,8 +83,7 @@
           name: 'box'
         });
 
-        var block_text = new Konva.Text({
-          // text: box_text,
+        var box_text = new Konva.Text({
           name: 'box_text'
         });
 
@@ -141,7 +140,7 @@
         layer.add(x_text);
         layer.add(edge_circle);
         layer.add(edge_text);
-        layer.add(block_text);
+        layer.add(box_text);
 
         return layer;
       }
@@ -273,7 +272,7 @@
 
       stage.on('click', (e) => {
         if (!drawing_connection && (e.target.hasName('edge_circle') || e.target.hasName('edge_text'))) {
-          var target;
+          var target = e.target;
           if (e.target.hasName('edge_text')){
             for(const child of e.target.parent.children){
               if (child.attrs.name == 'edge_circle'){
@@ -286,7 +285,6 @@
           }
         }
         else if (drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text'))){
-          console.log(e.target.parent);
           $.fn.stopDrawingConnection(e.target.parent);
         }
         else if (drawing_connection) {
@@ -384,6 +382,38 @@
         $.fn.centerBlockText(block_id);
       }
 
+      $.fn.updateBlockProps = (block_id, props) => {
+        block_data[block_id]['properties'] = props;
+        if(block_data[block_id]['type'] == 'join'){
+          const left_block = block_data[block_id]['properties']['left_block'];
+          var left_table = '';
+          for (const child of blocks[left_block].children) {
+            if (child.hasName('box_text')) {
+              left_table = child.attrs.text;
+            }
+          }
+          const right_block = block_data[block_id]['properties']['right_block'];
+          var right_table = '';
+          for (const child of blocks[right_block].children) {
+            if (child.hasName('box_text')) {
+              right_table = child.attrs.text;
+            }
+          }
+          const left_key = block_data[block_id]['properties']['left_key'];
+          const right_key = block_data[block_id]['properties']['right_key'];
+          const method = block_data[block_id]['properties']['method'];
+          const block_text = `
+          Join: (props)
+          Left Table: ${left_table}
+          Right Table: ${right_table}
+          Left Key: ${left_key}
+          Right Key: ${right_key}
+          Method: ${method}
+          `
+          $.fn.updateBlockText(block_id, block_text);
+        }
+      }
+
       $.fn.centerBlockText = (block_id) => {
         var box_width;
         var box_height;
@@ -399,6 +429,9 @@
             text_height = child.textHeight;
           }
         }
+
+        console.log(text_width);
+        console.log(text_height);
 
         var new_x = (box_width - text_width) / 2;
         var new_y = (box_height - text_height) / 2;
@@ -582,13 +615,14 @@
               var update_props_button = document.createElement('button');
               update_props_button.innerHTML = 'Update Properties';
               update_props_button.addEventListener('click', function(){
-                block_data[block_id]['properties'] = {
+                var props = {
                   'left_block': left_block_select.value,
                   'right_block': right_block_select.value,
                   'left_key': left_key_select.value,
                   'right_key': right_key_select.value,
                   'method': method_select.value
                 }
+                $.fn.updateBlockProps(block_id, props);
               });
 
               document.getElementById('transform_props').appendChild(update_props_button);
