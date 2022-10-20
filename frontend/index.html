@@ -365,6 +365,7 @@
         if (block.attrs.id == selected_block_id) {
           selected_block_id = null;
           $.fn.clearTable();
+          $.fn.hideBlockProps();
         }
 
         block.destroy();
@@ -426,22 +427,54 @@
           }
           if (child.attrs.name == 'box_text') {
             text_width = child.textWidth;
-            text_height = child.textHeight;
+            var text_lines = child.attrs.text.split('\n').length;
+            text_height = child.textHeight * text_lines;
           }
         }
 
-        console.log(text_width);
-        console.log(text_height);
+        if (text_width > (box_width * 0.9)) {
+          box_width = Math.ceil(text_width/(box_width * 0.9)) * 100;
+        }
+        if (text_height > (box_height * 0.9)) {
+          box_height = Math.ceil(text_height/(height * 0.9)) * 100;
+        }
 
         var new_x = (box_width - text_width) / 2;
         var new_y = (box_height - text_height) / 2;
 
         for (const child of blocks[block_id].children) {
+          if (child.attrs.name == 'box') {
+            child.width(box_width);
+            child.height(box_height);
+          }
+        }
+
+        // #TODO: Might need better centering method. Doesn't look right when box is resized.
+        for (const child of blocks[block_id].children) {
           if (child.attrs.name == 'box_text') {
             child.x(new_x);
             child.y(new_y);
+            child.zIndex(1);
           }
         }
+
+        for (const child of blocks[block_id].children) {
+          if (child.attrs.name == 'edge_circle') {
+            child.x(box_width/2);
+            child.y(box_height);
+            child.zIndex(2);
+          }
+        }
+
+        for (const child of blocks[block_id].children) {
+          if (child.attrs.name == 'edge_text') {
+            child.x((box_width/2) - 3);
+            child.y(box_height - 4);
+            child.zIndex(3);
+          }
+        }
+
+        $.fn.reRenderConnections(block_id);
       }
 
       $.fn.populateTable = (header, data) => {
@@ -487,6 +520,10 @@
             return child.attrs.text;
           }
         }
+      }
+
+      $.fn.hideBlockProps = () => {
+        document.getElementById('transform_props').replaceChildren();
       }
 
       $.fn.showBlockProps = (block_id) => {
@@ -658,6 +695,7 @@
           $.fn.setBlockStroke(block.attrs.id, 'black');
           selected_block_id = null;
           $.fn.clearTable();
+          $.fn.hideBlockProps();
         }
       }
 
