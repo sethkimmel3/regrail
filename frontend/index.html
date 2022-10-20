@@ -83,7 +83,7 @@
           name: 'box'
         });
 
-        var box_text = new Konva.Text({
+        var block_text = new Konva.Text({
           // text: box_text,
           name: 'box_text'
         });
@@ -141,7 +141,7 @@
         layer.add(x_text);
         layer.add(edge_circle);
         layer.add(edge_text);
-        layer.add(box_text);
+        layer.add(block_text);
 
         return layer;
       }
@@ -178,19 +178,26 @@
         stage.add(line_layer);
       }
 
-      $.fn.stopDrawingConnection = function(box){
+      $.fn.stopDrawingConnection = function(block){
         if(!drawing_connection){
           return;
         }
 
         var connector_id = line_layer.attrs.id
-        var to_block = box.parent.attrs.id;
+        var to_block = block.attrs.id;
         var edge = {'from':from_block, 'to':to_block, 'connector': connector_id};
 
         let found = 0;
         for (const edge of edges) {
           if (edge['from'] == from_block && edge['to'] == to_block){
             found = 1;
+          }
+        }
+
+        var box;
+        for (const child of block.children) {
+          if (child.hasName('box')) {
+            box = child;
           }
         }
 
@@ -266,7 +273,7 @@
 
       stage.on('click', (e) => {
         if (!drawing_connection && (e.target.hasName('edge_circle') || e.target.hasName('edge_text'))) {
-          var target = e.target;
+          var target;
           if (e.target.hasName('edge_text')){
             for(const child of e.target.parent.children){
               if (child.attrs.name == 'edge_circle'){
@@ -274,10 +281,13 @@
               }
             }
           }
-          $.fn.startDrawingConnection(target);
+          if (target != undefined) {
+            $.fn.startDrawingConnection(target);
+          }
         }
         else if (drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text'))){
-          $.fn.stopDrawingConnection(e.target);
+          console.log(e.target.parent);
+          $.fn.stopDrawingConnection(e.target.parent);
         }
         else if (drawing_connection) {
           line.destroy();
