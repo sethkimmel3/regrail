@@ -25,9 +25,10 @@
         <option value="data-source">Data Source</option>
         <option value="join">Join</option>
       </select>
-      <!-- These will not be harcoded in the future, obviously. -->
+
       <input type="file" name="data-select" id="data-select" />
       <button id="add-block" type="button">Add</button>
+      <button id="compile-model" type="button">Compile</button>
     </div>
 
     <div id="flow"></div>
@@ -59,7 +60,7 @@
       var blocks = {};
       var connections = {};
       var edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
-      var block_data = {}; // convention: {type: source/join/etc., properties: {},  header: Array(...), data: Array(Array()...Array())}
+      var block_data = {}; // convention: {type: source/join/etc., properties: {}, header: Array(...), data: Array(Array()...Array())}
 
       $.fn.blockFactory = function(){
         var block_id = "block-" + Math.random().toString(16).slice(2);
@@ -697,6 +698,11 @@
           $.fn.clearTable();
           $.fn.hideBlockProps();
         }
+      }
+
+      $.fn.compileModel = () => {
+        let model = {};
+
       }
 
   });

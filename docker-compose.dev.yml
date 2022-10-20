@@ -10,6 +10,14 @@ services:
      - 8080:80
     networks:
      - app-network
+  server:
+    build: ./backend
+    ports:
+      - 3000:3000
+    volumes:
+      - ./backend:/app
+    networks:
+      - app-network
 
 networks:
   app-network:
