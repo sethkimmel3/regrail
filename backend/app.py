@@ -21,11 +21,15 @@ def list_raw_assets():
         files.extend(full_names)
     return files
 
+def prepare_dataframe_for_return(data):
+    # TODO: truncate if above a certain size
+    return data.fillna('').to_dict('tight')
+
 @app.route('/get-raw-asset', methods=['GET'])
 def get_data_asset():
     asset_name = request.args.get('asset')
     data = pd.read_csv(asset_name, skipinitialspace=True)
-    return data.fillna('').to_dict('tight')
+    return prepare_dataframe_for_return(data)
 
 # def create_id(type):
 #     return type + '-' + ''.join(random.choice('1234567890abcdefghijklmnopqrstuvwxyz') for i in range(13))
@@ -36,12 +40,14 @@ def create_directory_if_not_exists(directory):
 
 def process_block(model_id, block_id, parents, type, properties, data_ref):
     if type == 'data-source':
-        raw_data = pd.read_csv(data_ref, skipinitialspace=True)
-        # we want to re-store the raw data as a model asset
-        directory = '/'.join(['model_assets', model_id])
-        create_directory_if_not_exists(directory)
-        data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
-        raw_data.to_parquet(data_ref)
+        if data_ref.split('/')[0] == 'raw_assets':
+            # we want to re-store the raw data as a model asset
+            raw_data = pd.read_csv(data_ref, skipinitialspace=True)
+            directory = '/'.join(['model_assets', model_id])
+            create_directory_if_not_exists(directory)
+            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
+            raw_data.to_parquet(data_ref)
+            data_dict = prepare_dataframe_for_return(raw_data)
     elif type == 'join':
         left_block = properties['left_block']
         left_key = properties['left_key']
@@ -57,8 +63,9 @@ def process_block(model_id, block_id, parents, type, properties, data_ref):
         directory = '/'.join(['model_assets', model_id])
         data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
         merged.to_parquet(data_ref)
+        data_dict = prepare_dataframe_for_return(merged)
 
-    return data_ref
+    return data_ref, data_dict
 
 @app.route('/run-model', methods=['GET'])
 def run_model():
@@ -72,13 +79,15 @@ def run_model():
         DG.add_edge(edge['from'], edge['to'])
     block_order = list(nx.topological_sort(DG))
 
-    ref_array = {}
-    ref_array[model_id] = {}
+    return_array = {}
+    return_array[model_id] = {}
     for block_id in block_order:
-        data_ref = process_block(model_id, block_id, DG.predecessors(block_id), blocks[block_id]['type'], blocks[block_id]['properties'], blocks[block_id]['data-ref'])
-        ref_array[model_id][block_id] = data_ref
+        return_array[model_id][block_id] = {}
+        data_ref, data_dict = process_block(model_id, block_id, DG.predecessors(block_id), blocks[block_id]['type'], blocks[block_id]['properties'], blocks[block_id]['data-ref'])
+        return_array[model_id][block_id]['data-ref'] = data_ref
+        return_array[model_id][block_id]['data'] = data_dict
 
-    return ref_array 
+    return return_array
 
 if __name__ == '__main__':
     app.run(debug = True, host='0.0.0.0', port=3000)
