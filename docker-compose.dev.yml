@@ -4,6 +4,7 @@ services:
   webserver:
     image: nginx
     container_name: webserver
+    restart: unless-stopped
     volumes:
      - ./frontend/:/usr/share/nginx/html
     ports:
@@ -12,6 +13,7 @@ services:
      - app-network
   server:
     build: ./backend
+    restart: unless-stopped
     ports:
       - 3000:3000
     volumes:

@@ -51,7 +51,7 @@
         var blocks = {};
         var connections = {};
         var edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
-        var block_data = {}; // convention: {type: source/join/etc., properties: {}, header: Array(...), data: Array(Array()...Array())}
+        var block_data = {}; // convention: {type: source/join/etc., properties: {}, data-ref: ..directory + file, header: Array(...), data: Array(Array()...Array())}
         const API_BASE_URL = 'http://localhost:3000';
 
         var width = window.innerWidth;
@@ -332,7 +332,7 @@
             var box_text = 'join';
             $.fn.updateBlockText(block.attrs.id, box_text);
 
-            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'header': null, 'data': null};
+            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null};
           }
         });
 
