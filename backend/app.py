@@ -2,6 +2,7 @@ from flask import Flask, request
 from flask_cors import CORS, cross_origin
 from os import walk
 import pandas as pd
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -23,6 +24,11 @@ def get_data_asset():
     asset_name = request.args.get('asset')
     data = pd.read_csv(asset_name, skipinitialspace=True)
     return data.fillna('').to_dict('tight')
+
+@app.route('/run-model', methods=['GET'])
+def run_model():
+    model = json.loads(request.args.get('model'))
+    return 'works'
 
 if __name__ == '__main__':
     app.run(debug = True, host='0.0.0.0', port=3000)

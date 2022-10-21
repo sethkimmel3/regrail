@@ -26,7 +26,7 @@
       <select name="data-select" id="data-select">
       </select>
       <button id="add-block" type="button">Add</button>
-      <button id="compile-model" type="button">Compile</button>
+      <button id="compile-model" type="button">Compile + Run</button>
     </div>
 
     <div id="flow"></div>
@@ -715,11 +715,12 @@
             'edges': edges_array
           };
 
-          console.log(model);
+          return model;
         }
 
         $( document ).on('click', '#compile-model', function() {
-          $.fn.compileModel();
+          var model = $.fn.compileModel();
+          $.fn.runModel(model);
         })
 
         $.fn.fetchRawAssets = () => {
@@ -741,6 +742,12 @@
             var rows = data['data'];
             block_data[block_id]['header'] = columns;
             block_data[block_id]['data'] = rows;
+          });
+        }
+
+        $.fn.runModel = (model) => {
+          $.get( API_BASE_URL + '/run-model', { 'model': JSON.stringify(model) }, function(data) {
+            console.log(data);
           });
         }
   });
