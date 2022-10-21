@@ -3,12 +3,10 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta http-equiv="X-UA-box_textatible" content="ie=edge">
     <script src="https://unpkg.com/konva@8.3.12/konva.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
-    <!-- PapaParse -->
-    <script src="scripts/papaparse.min.js"></script>
     <title>ReGrail</title>
     <style>
       table, th, td {
@@ -25,8 +23,8 @@
         <option value="data-source">Data Source</option>
         <option value="join">Join</option>
       </select>
-
-      <input type="file" name="data-select" id="data-select" />
+      <select name="data-select" id="data-select">
+      </select>
       <button id="add-block" type="button">Add</button>
       <button id="compile-model" type="button">Compile</button>
     </div>
@@ -39,672 +37,712 @@
   </div>
 	<script>
     $( document ).ready(function(){
-      var width = window.innerWidth;
-      var height = window.innerHeight;
 
       $( document ).on('change', '#block-select', function(){
         var select_value = $('#block-select').val();
-        if (select_value == 'data-source'){
-          $('#data-select').show();
-        } else {
-          $('#data-select').hide();
-        }
-      })
-
-      var stage = new Konva.Stage({
-        container: 'flow',
-        width: width,
-        height: height,
-      });
-
-      var blocks = {};
-      var connections = {};
-      var edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
-      var block_data = {}; // convention: {type: source/join/etc., properties: {}, header: Array(...), data: Array(Array()...Array())}
-
-      $.fn.blockFactory = function(){
-        var block_id = "block-" + Math.random().toString(16).slice(2);
-
-        var rectX = 50;
-        var rectY = 50;
-
-        var layer = new Konva.Layer({
-          draggable: true,
-          id: block_id,
-          x: rectX,
-          y: rectY
-        });
-
-        var box = new Konva.Rect({
-          width: 100,
-          height: 50,
-          fill: '#00D2FF',
-          stroke: 'black',
-          strokeWidth: 4,
-          name: 'box'
-        });
-
-        var box_text = new Konva.Text({
-          name: 'box_text'
-        });
-
-        var x_circle = new Konva.Circle({
-          radius: 10,
-          fill: 'red',
-          stroke: 'black'
-        });
-
-        var x_text = new Konva.Text({
-          text: 'X',
-          x: - 4,
-          y: - 4
-        });
-
-        var edge_circle = new Konva.Circle({
-          radius: 10,
-          x: box.width() / 2,
-          y: box.height(),
-          fill: 'green',
-          stroke: 'black',
-          name: 'edge_circle'
-        });
-
-        var edge_text = new Konva.Text({
-          text: '+',
-          x: (box.width() / 2) - 3,
-          y: box.height() - 4,
-          name: 'edge_text'
-        });
-
-        // add cursor styling
-        layer.on('mouseover', function () {
-          document.body.style.cursor = 'pointer';
-        });
-        layer.on('mouseout', function () {
-          document.body.style.cursor = 'default';
-        });
-
-        layer.on('dragend', function() {
-          $.fn.reRenderConnections(block_id);
-        })
-
-        x_circle.on('click', function () {
-          $.fn.removeBlock(layer);
-        });
-
-        x_text.on('click', function () {
-          $.fn.removeBlock(layer);
-        });
-
-        layer.add(box);
-        layer.add(x_circle);
-        layer.add(x_text);
-        layer.add(edge_circle);
-        layer.add(edge_text);
-        layer.add(box_text);
-
-        return layer;
-      }
-
-      var drawing_connection = false;
-      var from_block = null;
-      var line_layer;
-      var line;
-
-      var selected_block_id = null;
-
-      $.fn.startDrawingConnection = function(edge_circle){
-        var connector_id = "connector-" + Math.random().toString(16).slice(2);
-
-        line_layer = new Konva.Layer({
-          draggable: false,
-          id: connector_id
-        });
-
-        drawing_connection = true;
-        from_block = edge_circle.parent.attrs.id;
-
-        const pos = stage.getPointerPosition();
-
-        line = new Konva.Arrow({
-          stroke: 'black',
-          listening: false,
-          points: [edge_circle.absolutePosition().x, edge_circle.absolutePosition().y, pos.x, pos.y],
-          name: 'line'
-        });
-
-        line_layer.add(line);
-
-        stage.add(line_layer);
-      }
-
-      $.fn.stopDrawingConnection = function(block){
-        if(!drawing_connection){
-          return;
-        }
-
-        var connector_id = line_layer.attrs.id
-        var to_block = block.attrs.id;
-        var edge = {'from':from_block, 'to':to_block, 'connector': connector_id};
-
-        let found = 0;
-        for (const edge of edges) {
-          if (edge['from'] == from_block && edge['to'] == to_block){
-            found = 1;
+          if (select_value == 'data-source'){
+            $('#data-select').show();
+          } else {
+            $('#data-select').hide();
           }
+        });
+
+        var model_id = "model-" + Math.random().toString(16).slice(2);
+        var blocks = {};
+        var connections = {};
+        var edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
+        var block_data = {}; // convention: {type: source/join/etc., properties: {}, header: Array(...), data: Array(Array()...Array())}
+        const API_BASE_URL = 'http://localhost:3000';
+
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+
+        var stage = new Konva.Stage({
+          container: 'flow',
+          width: width,
+          height: height,
+        });
+
+        $.fn.blockFactory = function(){
+          var block_id = "block-" + Math.random().toString(16).slice(2);
+
+          var rectX = 50;
+          var rectY = 50;
+
+          var layer = new Konva.Layer({
+            draggable: true,
+            id: block_id,
+            x: rectX,
+            y: rectY
+          });
+
+          var box = new Konva.Rect({
+            width: 100,
+            height: 50,
+            fill: '#00D2FF',
+            stroke: 'black',
+            strokeWidth: 4,
+            name: 'box'
+          });
+
+          var box_text = new Konva.Text({
+            name: 'box_text'
+          });
+
+          var x_circle = new Konva.Circle({
+            radius: 10,
+            fill: 'red',
+            stroke: 'black'
+          });
+
+          var x_text = new Konva.Text({
+            text: 'X',
+            x: - 4,
+            y: - 4
+          });
+
+          var edge_circle = new Konva.Circle({
+            radius: 10,
+            x: box.width() / 2,
+            y: box.height(),
+            fill: 'green',
+            stroke: 'black',
+            name: 'edge_circle'
+          });
+
+          var edge_text = new Konva.Text({
+            text: '+',
+            x: (box.width() / 2) - 3,
+            y: box.height() - 4,
+            name: 'edge_text'
+          });
+
+          // add cursor styling
+          layer.on('mouseover', function () {
+            document.body.style.cursor = 'pointer';
+          });
+          layer.on('mouseout', function () {
+            document.body.style.cursor = 'default';
+          });
+
+          layer.on('dragend', function() {
+            $.fn.reRenderConnections(block_id);
+          })
+
+          x_circle.on('click', function () {
+            $.fn.removeBlock(layer);
+          });
+
+          x_text.on('click', function () {
+            $.fn.removeBlock(layer);
+          });
+
+          layer.add(box);
+          layer.add(x_circle);
+          layer.add(x_text);
+          layer.add(edge_circle);
+          layer.add(edge_text);
+          layer.add(box_text);
+
+          return layer;
         }
 
-        var box;
-        for (const child of block.children) {
-          if (child.hasName('box')) {
-            box = child;
+        var drawing_connection = false;
+        var from_block = null;
+        var line_layer;
+        var line;
+
+        var selected_block_id = null;
+
+        $.fn.startDrawingConnection = function(edge_circle){
+          var connector_id = "connector-" + Math.random().toString(16).slice(2);
+
+          line_layer = new Konva.Layer({
+            draggable: false,
+            id: connector_id
+          });
+
+          drawing_connection = true;
+          from_block = edge_circle.parent.attrs.id;
+
+          const pos = stage.getPointerPosition();
+
+          line = new Konva.Arrow({
+            stroke: 'black',
+            listening: false,
+            points: [edge_circle.absolutePosition().x, edge_circle.absolutePosition().y, pos.x, pos.y],
+            name: 'line'
+          });
+
+          line_layer.add(line);
+
+          stage.add(line_layer);
+        }
+
+        $.fn.stopDrawingConnection = function(block){
+          if(!drawing_connection){
+            return;
           }
-        }
 
-        if(!found){
-          edges.push(edge);
+          var connector_id = line_layer.attrs.id
+          var to_block = block.attrs.id;
+          var edge = {'from':from_block, 'to':to_block, 'connector': connector_id};
 
-          const points = line.points().slice();
-          points[2] = box.absolutePosition().x + box.attrs.width / 2;
-          points[3] = box.absolutePosition().y;
-          line.points(points);
-          line_layer.batchDraw();
-
-          connections[connector_id] = line_layer;
-        } else {
-          line.destroy();
-          line_layer.draw();
-          line = null;
-          line_layer = null;
-        }
-        // TODO: handle cycles
-        // TODO: can't connect source to source
-
-        drawing_connection = false;
-        from_block = null;
-      }
-
-      $.fn.reRenderConnection = (edge) => {
-        let from_x;
-        let from_y;
-        for(const child of blocks[edge['from']].children){
-          if (child.attrs.name == 'edge_circle'){
-            from_x = child.absolutePosition().x;
-            from_y = child.absolutePosition().y;
-          }
-        }
-
-        let to_x;
-        let to_y;
-        for(const child of blocks[edge['to']].children){
-          if (child.attrs.name == 'box'){
-            to_x = child.absolutePosition().x + child.attrs.width / 2;
-            to_y = child.absolutePosition().y;
-          }
-        }
-
-        for(const child of connections[edge['connector']].children){
-          if (child.attrs.name == 'line'){
-            child.points([from_x, from_y, to_x, to_y]);
-          }
-        }
-        connections[edge['connector']].batchDraw();
-      }
-
-      $.fn.reRenderConnections = (block_id) => {
-        for (const edge of edges) {
-          if (edge['from'] == block_id || edge['to'] == block_id){
-            $.fn.reRenderConnection(edge);
-          }
-        }
-      }
-
-      stage.on('mousemove', (e) => {
-        if (!drawing_connection){
-          return;
-        }
-        const pos = stage.getPointerPosition();
-        const points = line.points().slice();
-        points[2] = pos.x;
-        points[3] = pos.y;
-        line.points(points);
-        line_layer.batchDraw();
-      });
-
-      stage.on('click', (e) => {
-        if (!drawing_connection && (e.target.hasName('edge_circle') || e.target.hasName('edge_text'))) {
-          var target = e.target;
-          if (e.target.hasName('edge_text')){
-            for(const child of e.target.parent.children){
-              if (child.attrs.name == 'edge_circle'){
-                target = child;
-              }
+          let found = 0;
+          for (const edge of edges) {
+            if (edge['from'] == from_block && edge['to'] == to_block){
+              found = 1;
             }
           }
-          if (target != undefined) {
-            $.fn.startDrawingConnection(target);
+
+          var box;
+          for (const child of block.children) {
+            if (child.hasName('box')) {
+              box = child;
+            }
           }
-        }
-        else if (drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text'))){
-          $.fn.stopDrawingConnection(e.target.parent);
-        }
-        else if (drawing_connection) {
-          line.destroy();
-          line_layer.draw();
-          line = null;
-          line_layer = null;
+
+          if(!found){
+            edges.push(edge);
+
+            const points = line.points().slice();
+            points[2] = box.absolutePosition().x + box.attrs.width / 2;
+            points[3] = box.absolutePosition().y;
+            line.points(points);
+            line_layer.batchDraw();
+
+            connections[connector_id] = line_layer;
+          } else {
+            line.destroy();
+            line_layer.draw();
+            line = null;
+            line_layer = null;
+          }
+          // TODO: handle cycles
+          // TODO: can't connect source to source
+
           drawing_connection = false;
           from_block = null;
         }
-        else if (!drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text')) && !e.target.hasName('edge_circle') && !e.target.hasName('edge_text')){
-          $.fn.toggleSelectedBlock(e.target.parent);
-        }
-      })
 
-      $( document ).on('click', '#add-block', function(){
-        var block_type = $('#block-select').val();
-        if (block_type == 'data-source'){
-          var data_source = $('#data-select').val();
-
-          if (data_source == undefined || data_source == ""){
-            window.alert("You must select a data source.")
+        $.fn.reRenderConnection = (edge) => {
+          let from_x;
+          let from_y;
+          for(const child of blocks[edge['from']].children){
+            if (child.attrs.name == 'edge_circle'){
+              from_x = child.absolutePosition().x;
+              from_y = child.absolutePosition().y;
+            }
           }
-          else{
+
+          let to_x;
+          let to_y;
+          for(const child of blocks[edge['to']].children){
+            if (child.attrs.name == 'box'){
+              to_x = child.absolutePosition().x + child.attrs.width / 2;
+              to_y = child.absolutePosition().y;
+            }
+          }
+
+          for(const child of connections[edge['connector']].children){
+            if (child.attrs.name == 'line'){
+              child.points([from_x, from_y, to_x, to_y]);
+            }
+          }
+          connections[edge['connector']].batchDraw();
+        }
+
+        $.fn.reRenderConnections = (block_id) => {
+          for (const edge of edges) {
+            if (edge['from'] == block_id || edge['to'] == block_id){
+              $.fn.reRenderConnection(edge);
+            }
+          }
+        }
+
+        stage.on('mousemove', (e) => {
+          if (!drawing_connection){
+            return;
+          }
+          const pos = stage.getPointerPosition();
+          const points = line.points().slice();
+          points[2] = pos.x;
+          points[3] = pos.y;
+          line.points(points);
+          line_layer.batchDraw();
+        });
+
+        stage.on('click', (e) => {
+          if (!drawing_connection && (e.target.hasName('edge_circle') || e.target.hasName('edge_text'))) {
+            var target = e.target;
+            if (e.target.hasName('edge_text')){
+              for(const child of e.target.parent.children){
+                if (child.attrs.name == 'edge_circle'){
+                  target = child;
+                }
+              }
+            }
+            if (target != undefined) {
+              $.fn.startDrawingConnection(target);
+            }
+          }
+          else if (drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text'))){
+            $.fn.stopDrawingConnection(e.target.parent);
+          }
+          else if (drawing_connection) {
+            line.destroy();
+            line_layer.draw();
+            line = null;
+            line_layer = null;
+            drawing_connection = false;
+            from_block = null;
+          }
+          else if (!drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text')) && !e.target.hasName('edge_circle') && !e.target.hasName('edge_text')){
+            $.fn.toggleSelectedBlock(e.target.parent);
+          }
+        })
+
+        $( document ).on('click', '#add-block', function(){
+          var block_type = $('#block-select').val();
+          if (block_type == 'data-source'){
+            var data_source = $('#data-select').val();
+
+            if (data_source == undefined || data_source == ""){
+              window.alert("You must select a data source.")
+            }
+            else{
+              var block = $.fn.blockFactory();
+              blocks[block.attrs.id] = block;
+              stage.add(block);
+              block_data[block.attrs.id] = {'type': 'data-source', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null};
+
+              var box_text = data_source.split('/')[data_source.split('/').length - 1];
+              $.fn.updateBlockText(block.attrs.id, box_text);
+
+              var asset = $.fn.loadRawAsset(block.attrs.id, data_source);
+            }
+          }
+          else if (block_type == 'join'){
+            var data_source = null;
+
             var block = $.fn.blockFactory();
             blocks[block.attrs.id] = block;
             stage.add(block);
-            block_data[block.attrs.id] = {'type': 'data-source', 'properties': {}, 'header': null, 'data': null};
 
-            var box_text = data_source.split('\\')[data_source.split('\\').length - 1];
+            var box_text = 'join';
             $.fn.updateBlockText(block.attrs.id, box_text);
 
-            var file = document.getElementById('data-select').files[0];
+            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'header': null, 'data': null};
+          }
+        });
 
-            var d = Papa.parse(file, {
-              header: true,
-              download: true,
-              dynamicTyping: true,
-              complete: function(results){
-                block_data[block.attrs.id]['header'] = results.meta.fields;
-                block_data[block.attrs.id]['data'] = results.data;
+        $.fn.removeBlock = (block) => {
+          var indices_to_remove = [];
+          var index = 0;
+          // first loop through the edges to destroy the connector and track
+          // which edges to remove from the array
+          for (const edge of edges){
+            if (edge['to'] == block.attrs.id || edge['from'] == block.attrs.id){
+              connections[edge['connector']].destroy();
+              delete connections[edge['connector']];
+              indices_to_remove.push(index);
+            }
+            index += 1;
+          }
+          for (var i = indices_to_remove.length - 1; i >= 0; i--) {
+            edges.splice(indices_to_remove[i], 1);
+          }
+
+          // now remove the block
+          if (block.attrs.id == selected_block_id) {
+            selected_block_id = null;
+            $.fn.clearTable();
+            $.fn.hideBlockProps();
+          }
+
+          block.destroy();
+          delete blocks[block.attrs.id];
+          delete block_data[block.attrs.id];
+          document.body.style.cursor = 'default';
+        }
+
+        $.fn.updateBlockText = (block_id, text) => {
+          for (const child of blocks[block_id].children) {
+            if (child.attrs.name == 'box_text') {
+              child.text(text);
+            }
+          }
+          $.fn.centerBlockText(block_id);
+        }
+
+        $.fn.updateBlockProps = (block_id, props) => {
+          block_data[block_id]['properties'] = props;
+          if(block_data[block_id]['type'] == 'join'){
+            const left_block = block_data[block_id]['properties']['left_block'];
+            var left_table = '';
+            for (const child of blocks[left_block].children) {
+              if (child.hasName('box_text')) {
+                left_table = child.attrs.text;
               }
-            });
+            }
+            const right_block = block_data[block_id]['properties']['right_block'];
+            var right_table = '';
+            for (const child of blocks[right_block].children) {
+              if (child.hasName('box_text')) {
+                right_table = child.attrs.text;
+              }
+            }
+            const left_key = block_data[block_id]['properties']['left_key'];
+            const right_key = block_data[block_id]['properties']['right_key'];
+            const method = block_data[block_id]['properties']['method'];
+            const block_text = `
+            Join: (props)
+            Left Table: ${left_table}
+            Right Table: ${right_table}
+            Left Key: ${left_key}
+            Right Key: ${right_key}
+            Method: ${method}
+            `
+            $.fn.updateBlockText(block_id, block_text);
           }
         }
-        else if (block_type == 'join'){
-          var data_source = null;
 
-          var block = $.fn.blockFactory();
-          blocks[block.attrs.id] = block;
-          stage.add(block);
-
-          var box_text = 'join';
-          $.fn.updateBlockText(block.attrs.id, box_text);
-
-          block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'header': null, 'data': null};
-        }
-      });
-
-      $.fn.removeBlock = (block) => {
-        var indices_to_remove = [];
-        var index = 0;
-        // first loop through the edges to destroy the connector and track
-        // which edges to remove from the array
-        for (const edge of edges){
-          if (edge['to'] == block.attrs.id || edge['from'] == block.attrs.id){
-            connections[edge['connector']].destroy();
-            delete connections[edge['connector']];
-            indices_to_remove.push(index);
-          }
-          index += 1;
-        }
-        for (var i = indices_to_remove.length - 1; i >= 0; i--) {
-          edges.splice(indices_to_remove[i], 1);
-        }
-
-        // now remove the block
-        if (block.attrs.id == selected_block_id) {
-          selected_block_id = null;
-          $.fn.clearTable();
-          $.fn.hideBlockProps();
-        }
-
-        block.destroy();
-        delete blocks[block.attrs.id];
-        delete block_data[block.attrs.id];
-        document.body.style.cursor = 'default';
-      }
-
-      $.fn.updateBlockText = (block_id, text) => {
-        for (const child of blocks[block_id].children) {
-          if (child.attrs.name == 'box_text') {
-            child.text(text);
-          }
-        }
-        $.fn.centerBlockText(block_id);
-      }
-
-      $.fn.updateBlockProps = (block_id, props) => {
-        block_data[block_id]['properties'] = props;
-        if(block_data[block_id]['type'] == 'join'){
-          const left_block = block_data[block_id]['properties']['left_block'];
-          var left_table = '';
-          for (const child of blocks[left_block].children) {
-            if (child.hasName('box_text')) {
-              left_table = child.attrs.text;
+        $.fn.centerBlockText = (block_id) => {
+          var box_width;
+          var box_height;
+          var text_width;
+          var text_height;
+          for (const child of blocks[block_id].children) {
+            if (child.attrs.name == 'box') {
+              box_width = child.attrs.width;
+              box_height = child.attrs.height;
+            }
+            if (child.attrs.name == 'box_text') {
+              text_width = child.textWidth;
+              var text_lines = child.attrs.text.split('\n').length;
+              text_height = child.textHeight * text_lines;
             }
           }
-          const right_block = block_data[block_id]['properties']['right_block'];
-          var right_table = '';
-          for (const child of blocks[right_block].children) {
-            if (child.hasName('box_text')) {
-              right_table = child.attrs.text;
+
+          if (text_width > (box_width * 0.9)) {
+            box_width = Math.ceil(text_width/(box_width * 0.9)) * 100;
+          }
+          if (text_height > (box_height * 0.9)) {
+            box_height = Math.ceil(text_height/(height * 0.9)) * 100;
+          }
+
+          var new_x = (box_width - text_width) / 2;
+          var new_y = (box_height - text_height) / 2;
+
+          for (const child of blocks[block_id].children) {
+            if (child.attrs.name == 'box') {
+              child.width(box_width);
+              child.height(box_height);
             }
           }
-          const left_key = block_data[block_id]['properties']['left_key'];
-          const right_key = block_data[block_id]['properties']['right_key'];
-          const method = block_data[block_id]['properties']['method'];
-          const block_text = `
-          Join: (props)
-          Left Table: ${left_table}
-          Right Table: ${right_table}
-          Left Key: ${left_key}
-          Right Key: ${right_key}
-          Method: ${method}
-          `
-          $.fn.updateBlockText(block_id, block_text);
-        }
-      }
 
-      $.fn.centerBlockText = (block_id) => {
-        var box_width;
-        var box_height;
-        var text_width;
-        var text_height;
-        for (const child of blocks[block_id].children) {
-          if (child.attrs.name == 'box') {
-            box_width = child.attrs.width;
-            box_height = child.attrs.height;
+          // #TODO: Might need better centering method. Doesn't look right when box is resized.
+          for (const child of blocks[block_id].children) {
+            if (child.attrs.name == 'box_text') {
+              child.x(new_x);
+              child.y(new_y);
+              child.zIndex(1);
+            }
           }
-          if (child.attrs.name == 'box_text') {
-            text_width = child.textWidth;
-            var text_lines = child.attrs.text.split('\n').length;
-            text_height = child.textHeight * text_lines;
+
+          for (const child of blocks[block_id].children) {
+            if (child.attrs.name == 'edge_circle') {
+              child.x(box_width/2);
+              child.y(box_height);
+              child.zIndex(2);
+            }
           }
-        }
 
-        if (text_width > (box_width * 0.9)) {
-          box_width = Math.ceil(text_width/(box_width * 0.9)) * 100;
-        }
-        if (text_height > (box_height * 0.9)) {
-          box_height = Math.ceil(text_height/(height * 0.9)) * 100;
-        }
-
-        var new_x = (box_width - text_width) / 2;
-        var new_y = (box_height - text_height) / 2;
-
-        for (const child of blocks[block_id].children) {
-          if (child.attrs.name == 'box') {
-            child.width(box_width);
-            child.height(box_height);
+          for (const child of blocks[block_id].children) {
+            if (child.attrs.name == 'edge_text') {
+              child.x((box_width/2) - 3);
+              child.y(box_height - 4);
+              child.zIndex(3);
+            }
           }
+
+          $.fn.reRenderConnections(block_id);
         }
 
-        // #TODO: Might need better centering method. Doesn't look right when box is resized.
-        for (const child of blocks[block_id].children) {
-          if (child.attrs.name == 'box_text') {
-            child.x(new_x);
-            child.y(new_y);
-            child.zIndex(1);
-          }
-        }
-
-        for (const child of blocks[block_id].children) {
-          if (child.attrs.name == 'edge_circle') {
-            child.x(box_width/2);
-            child.y(box_height);
-            child.zIndex(2);
-          }
-        }
-
-        for (const child of blocks[block_id].children) {
-          if (child.attrs.name == 'edge_text') {
-            child.x((box_width/2) - 3);
-            child.y(box_height - 4);
-            child.zIndex(3);
-          }
-        }
-
-        $.fn.reRenderConnections(block_id);
-      }
-
-      $.fn.populateTable = (header, data) => {
-        document.getElementById('data-table').replaceChildren();
-        var headerRow = document.createElement('tr');
-        for (const item of header){
-          var cell = document.createElement('th');
-          cell.innerHTML = item;
-          headerRow.appendChild(cell);
-        }
-        document.getElementById('data-table').appendChild(headerRow);
-
-        for (const row of data){
-          var tableRow = document.createElement('tr');
-          for (const item of Object.values(row)){
-            var cell = document.createElement('td');
+        $.fn.populateTable = (header, data) => {
+          document.getElementById('data-table').replaceChildren();
+          var headerRow = document.createElement('tr');
+          for (const item of header){
+            var cell = document.createElement('th');
             cell.innerHTML = item;
-            tableRow.append(cell);
+            headerRow.appendChild(cell);
           }
-          document.getElementById('data-table').appendChild(tableRow);
-        }
-      }
+          document.getElementById('data-table').appendChild(headerRow);
 
-      $.fn.clearTable = () => {
-        document.getElementById('data-table').replaceChildren();
-      }
-
-      $.fn.getBlockParents = (block_id) => {
-        var parents = [];
-        for (const edge of edges) {
-          if (edge['to'] == block_id) {
-            if (!parents.includes(edge['from'])) {
-              parents.push(edge['from']);
+          for (const row of data){
+            var tableRow = document.createElement('tr');
+            for (const item of Object.values(row)){
+              var cell = document.createElement('td');
+              cell.innerHTML = item;
+              tableRow.append(cell);
             }
+            document.getElementById('data-table').appendChild(tableRow);
           }
         }
-        return parents;
-      }
 
-      $.fn.getBlockName = (block_id) => {
-        for (const child of blocks[block_id].children) {
-          if (child.attrs.name == 'box_text') {
-            return child.attrs.text;
-          }
+        $.fn.clearTable = () => {
+          document.getElementById('data-table').replaceChildren();
         }
-      }
 
-      $.fn.hideBlockProps = () => {
-        document.getElementById('transform_props').replaceChildren();
-      }
-
-      $.fn.showBlockProps = (block_id) => {
-        document.getElementById('transform_props').replaceChildren();
-        var type = block_data[block_id]['type'];
-
-        // TODO: Dynamically build config picker here
-        switch (type) {
-          case 'join':
-            var parents = $.fn.getBlockParents(block_id);
-            if (parents.length != 2){
-              window.alert('Joins must have two parents!')
-            }
-            else {
-              // TODO: error if parents.length != 2
-              var left_block_select_label = document.createElement('label');
-              left_block_select_label.innerHTML = 'Left Table: ';
-
-              var left_block_select = document.createElement('select');
-              var left_block_select_option_1 = document.createElement('option');
-              left_block_select_option_1.value = parents[0];
-              left_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
-              var left_block_select_option_2 = document.createElement('option');
-              left_block_select_option_2.value = parents[1];
-              left_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
-              left_block_select.appendChild(left_block_select_option_1);
-              left_block_select.appendChild(left_block_select_option_2);
-
-              document.getElementById('transform_props').appendChild(left_block_select_label);
-              document.getElementById('transform_props').appendChild(left_block_select);
-              document.getElementById('transform_props').appendChild(document.createElement('BR'));
-
-              var right_block_select_label = document.createElement('label');
-              right_block_select_label.innerHTML = 'Right Table: ';
-
-              var right_block_select = document.createElement('select');
-              var right_block_select_option_1 = document.createElement('option');
-              right_block_select_option_1.value = parents[0];
-              right_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
-              var right_block_select_option_2 = document.createElement('option');
-              right_block_select_option_2.value = parents[1];
-              right_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
-              right_block_select.appendChild(right_block_select_option_1);
-              right_block_select.appendChild(right_block_select_option_2);
-
-              document.getElementById('transform_props').appendChild(right_block_select_label);
-              document.getElementById('transform_props').appendChild(right_block_select);
-              document.getElementById('transform_props').appendChild(document.createElement('BR'));
-
-              var left_key_select_label = document.createElement('label');
-              left_key_select_label.innerHTML = 'Left Key: ';
-
-              var left_key_select = document.createElement('select');
-              for (const header_item of block_data[left_block_select.value]['header']){
-                var left_key_select_option = document.createElement('option');
-                left_key_select_option.value = header_item;
-                left_key_select_option.innerHTML = header_item;
-                left_key_select.appendChild(left_key_select_option);
+        $.fn.getBlockParents = (block_id) => {
+          var parents = [];
+          for (const edge of edges) {
+            if (edge['to'] == block_id) {
+              if (!parents.includes(edge['from'])) {
+                parents.push(edge['from']);
               }
+            }
+          }
+          return parents;
+        }
 
-              left_block_select.addEventListener('change', function(){
-                left_key_select.replaceChildren();
+        $.fn.getBlockName = (block_id) => {
+          for (const child of blocks[block_id].children) {
+            if (child.attrs.name == 'box_text') {
+              return child.attrs.text;
+            }
+          }
+        }
+
+        $.fn.hideBlockProps = () => {
+          document.getElementById('transform_props').replaceChildren();
+        }
+
+        $.fn.showBlockProps = (block_id) => {
+          document.getElementById('transform_props').replaceChildren();
+          var type = block_data[block_id]['type'];
+
+          // TODO: Dynamically build config picker here
+          switch (type) {
+            case 'join':
+              var parents = $.fn.getBlockParents(block_id);
+              if (parents.length != 2){
+                window.alert('Joins must have two parents!')
+              }
+              else {
+                // TODO: error if parents.length != 2
+                var left_block_select_label = document.createElement('label');
+                left_block_select_label.innerHTML = 'Left Table: ';
+
+                var left_block_select = document.createElement('select');
+                var left_block_select_option_1 = document.createElement('option');
+                left_block_select_option_1.value = parents[0];
+                left_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
+                var left_block_select_option_2 = document.createElement('option');
+                left_block_select_option_2.value = parents[1];
+                left_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
+                left_block_select.appendChild(left_block_select_option_1);
+                left_block_select.appendChild(left_block_select_option_2);
+
+                document.getElementById('transform_props').appendChild(left_block_select_label);
+                document.getElementById('transform_props').appendChild(left_block_select);
+                document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+                var right_block_select_label = document.createElement('label');
+                right_block_select_label.innerHTML = 'Right Table: ';
+
+                var right_block_select = document.createElement('select');
+                var right_block_select_option_1 = document.createElement('option');
+                right_block_select_option_1.value = parents[0];
+                right_block_select_option_1.innerHTML = $.fn.getBlockName(parents[0]);
+                var right_block_select_option_2 = document.createElement('option');
+                right_block_select_option_2.value = parents[1];
+                right_block_select_option_2.innerHTML = $.fn.getBlockName(parents[1]);
+                right_block_select.appendChild(right_block_select_option_1);
+                right_block_select.appendChild(right_block_select_option_2);
+
+                document.getElementById('transform_props').appendChild(right_block_select_label);
+                document.getElementById('transform_props').appendChild(right_block_select);
+                document.getElementById('transform_props').appendChild(document.createElement('BR'));
+
+                var left_key_select_label = document.createElement('label');
+                left_key_select_label.innerHTML = 'Left Key: ';
+
+                var left_key_select = document.createElement('select');
                 for (const header_item of block_data[left_block_select.value]['header']){
                   var left_key_select_option = document.createElement('option');
                   left_key_select_option.value = header_item;
                   left_key_select_option.innerHTML = header_item;
                   left_key_select.appendChild(left_key_select_option);
                 }
-              });
 
-              document.getElementById('transform_props').appendChild(left_key_select_label);
-              document.getElementById('transform_props').appendChild(left_key_select);
-              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                left_block_select.addEventListener('change', function(){
+                  left_key_select.replaceChildren();
+                  for (const header_item of block_data[left_block_select.value]['header']){
+                    var left_key_select_option = document.createElement('option');
+                    left_key_select_option.value = header_item;
+                    left_key_select_option.innerHTML = header_item;
+                    left_key_select.appendChild(left_key_select_option);
+                  }
+                });
 
-              var right_key_select_label = document.createElement('label');
-              right_key_select_label.innerHTML = 'Right Key: ';
+                document.getElementById('transform_props').appendChild(left_key_select_label);
+                document.getElementById('transform_props').appendChild(left_key_select);
+                document.getElementById('transform_props').appendChild(document.createElement('BR'));
 
-              var right_key_select = document.createElement('select');
-              for (const header_item of block_data[right_block_select.value]['header']){
-                var right_key_select_option = document.createElement('option');
-                right_key_select_option.value = header_item;
-                right_key_select_option.innerHTML = header_item;
-                right_key_select.appendChild(right_key_select_option);
-              }
+                var right_key_select_label = document.createElement('label');
+                right_key_select_label.innerHTML = 'Right Key: ';
 
-              right_block_select.addEventListener('change', function(){
-                right_key_select.replaceChildren();
+                var right_key_select = document.createElement('select');
                 for (const header_item of block_data[right_block_select.value]['header']){
                   var right_key_select_option = document.createElement('option');
                   right_key_select_option.value = header_item;
                   right_key_select_option.innerHTML = header_item;
                   right_key_select.appendChild(right_key_select_option);
                 }
-              });
 
-              document.getElementById('transform_props').appendChild(right_key_select_label);
-              document.getElementById('transform_props').appendChild(right_key_select);
-              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                right_block_select.addEventListener('change', function(){
+                  right_key_select.replaceChildren();
+                  for (const header_item of block_data[right_block_select.value]['header']){
+                    var right_key_select_option = document.createElement('option');
+                    right_key_select_option.value = header_item;
+                    right_key_select_option.innerHTML = header_item;
+                    right_key_select.appendChild(right_key_select_option);
+                  }
+                });
 
-              var method_select_label = document.createElement('label');
-              method_select_label.innerHTML = 'Method: ';
+                document.getElementById('transform_props').appendChild(right_key_select_label);
+                document.getElementById('transform_props').appendChild(right_key_select);
+                document.getElementById('transform_props').appendChild(document.createElement('BR'));
 
-              var method_select = document.createElement('select');
-              var method_option_left = document.createElement('option');
-              method_option_left.value = 'left';
-              method_option_left.innerHTML = 'left';
-              var method_option_right = document.createElement('option');
-              method_option_right.value = 'right';
-              method_option_right.innerHTML = 'right';
-              var method_option_outer = document.createElement('option');
-              method_option_right.value = 'outer';
-              method_option_outer.innerHTML = 'outer';
-              var method_option_inner = document.createElement('option');
-              method_option_inner.value = 'inner';
-              method_option_inner.innerHTML = 'inner';
+                var method_select_label = document.createElement('label');
+                method_select_label.innerHTML = 'Method: ';
 
-              method_select.appendChild(method_option_left);
-              method_select.appendChild(method_option_right);
-              method_select.appendChild(method_option_outer);
-              method_select.appendChild(method_option_inner);
+                var method_select = document.createElement('select');
+                var method_option_left = document.createElement('option');
+                method_option_left.value = 'left';
+                method_option_left.innerHTML = 'left';
+                var method_option_right = document.createElement('option');
+                method_option_right.value = 'right';
+                method_option_right.innerHTML = 'right';
+                var method_option_outer = document.createElement('option');
+                method_option_right.value = 'outer';
+                method_option_outer.innerHTML = 'outer';
+                var method_option_inner = document.createElement('option');
+                method_option_inner.value = 'inner';
+                method_option_inner.innerHTML = 'inner';
 
-              document.getElementById('transform_props').appendChild(method_select_label);
-              document.getElementById('transform_props').appendChild(method_select);
-              document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                method_select.appendChild(method_option_left);
+                method_select.appendChild(method_option_right);
+                method_select.appendChild(method_option_outer);
+                method_select.appendChild(method_option_inner);
 
-              var update_props_button = document.createElement('button');
-              update_props_button.innerHTML = 'Update Properties';
-              update_props_button.addEventListener('click', function(){
-                var props = {
-                  'left_block': left_block_select.value,
-                  'right_block': right_block_select.value,
-                  'left_key': left_key_select.value,
-                  'right_key': right_key_select.value,
-                  'method': method_select.value
-                }
-                $.fn.updateBlockProps(block_id, props);
-              });
+                document.getElementById('transform_props').appendChild(method_select_label);
+                document.getElementById('transform_props').appendChild(method_select);
+                document.getElementById('transform_props').appendChild(document.createElement('BR'));
 
-              document.getElementById('transform_props').appendChild(update_props_button);
+                var update_props_button = document.createElement('button');
+                update_props_button.innerHTML = 'Update Properties';
+                update_props_button.addEventListener('click', function(){
+                  var props = {
+                    'left_block': left_block_select.value,
+                    'right_block': right_block_select.value,
+                    'left_key': left_key_select.value,
+                    'right_key': right_key_select.value,
+                    'method': method_select.value
+                  }
+                  $.fn.updateBlockProps(block_id, props);
+                });
+
+                document.getElementById('transform_props').appendChild(update_props_button);
+              }
+          }
+        }
+
+        // $( '#add-block' ).click();
+
+        $.fn.setBlockStroke = function(block_id, color){
+          for (const child of blocks[block_id].children){
+            if (child.attrs.name == 'box'){
+              child.stroke(color);
             }
-        }
-      }
-
-      // $( '#add-block' ).click();
-
-      $.fn.setBlockStroke = function(block_id, color){
-        for (const child of blocks[block_id].children){
-          if (child.attrs.name == 'box'){
-            child.stroke(color);
           }
         }
-      }
 
-      $.fn.toggleSelectedBlock = function(block) {
-        if (selected_block_id != block.attrs.id){
-          if (selected_block_id != null && selected_block_id in blocks){
-            $.fn.setBlockStroke(selected_block_id, 'black');
+        $.fn.toggleSelectedBlock = function(block) {
+          if (selected_block_id != block.attrs.id){
+            if (selected_block_id != null && selected_block_id in blocks){
+              $.fn.setBlockStroke(selected_block_id, 'black');
+            }
+            $.fn.setBlockStroke(block.attrs.id, 'yellow');
+            selected_block_id = block.attrs.id;
+            if ( block_data[block.attrs.id]['header'] == null && block_data[block.attrs.id]['data'] == null ){
+              $.fn.clearTable();
+            } else {
+              $.fn.populateTable(block_data[block.attrs.id]['header'], block_data[block.attrs.id]['data']);
+            }
+            $.fn.showBlockProps(block.attrs.id);
           }
-          $.fn.setBlockStroke(block.attrs.id, 'yellow');
-          selected_block_id = block.attrs.id;
-          if ( block_data[block.attrs.id]['header'] == null && block_data[block.attrs.id]['data'] == null ){
+          else {
+            $.fn.setBlockStroke(block.attrs.id, 'black');
+            selected_block_id = null;
             $.fn.clearTable();
-          } else {
-            $.fn.populateTable(block_data[block.attrs.id]['header'], block_data[block.attrs.id]['data']);
+            $.fn.hideBlockProps();
           }
-          $.fn.showBlockProps(block.attrs.id);
         }
-        else {
-          $.fn.setBlockStroke(block.attrs.id, 'black');
-          selected_block_id = null;
-          $.fn.clearTable();
-          $.fn.hideBlockProps();
+
+        $.fn.compileModel = () => {
+          var blocks_array = {};
+          for (const block_id of Object.keys(blocks)) {
+            blocks_array[block_id] = {
+              'type': block_data[block_id]['type'],
+              'properties': block_data[block_id]['properties'],
+              'data-ref': block_data[block_id]['data-ref']
+            }
+          }
+
+          var edges_array = {};
+          for (const edge of edges) {
+            edges_array[edge['connector']] = {
+              'from': edge['from'],
+              'to': edge['to']
+            }
+          }
+
+          let model = {
+            'model-id': model_id,
+            'blocks': blocks_array,
+            'edges': edges_array
+          };
+
+          console.log(model);
         }
-      }
 
-      $.fn.compileModel = () => {
-        let model = {};
+        $( document ).on('click', '#compile-model', function() {
+          $.fn.compileModel();
+        })
 
-      }
+        $.fn.fetchRawAssets = () => {
+          $.get( API_BASE_URL + '/list-raw-assets', function(data) {
+              for (var i = 0; i < data.length; i++){
+                var data_option = document.createElement('option');
+                data_option.value = data[i];
+                data_option.innerHTML = data[i].split('/')[data[i].split('/').length - 1];
+                document.getElementById('data-select').append(data_option);
+              }
+          })
+        }
 
+        $.fn.fetchRawAssets();
+
+        $.fn.loadRawAsset = (block_id, asset) => {
+          $.get( API_BASE_URL + '/get-raw-asset', {'asset': asset}, function(data) {
+            var columns = data['columns'];
+            var rows = data['data'];
+            block_data[block_id]['header'] = columns;
+            block_data[block_id]['data'] = rows;
+          });
+        }
   });
   </script>
   </body>

@@ -1,4 +1,4 @@
-FROM python:3.9-alpine
+FROM python:3.9-slim
 
 EXPOSE 3000
 
@@ -8,4 +8,4 @@ COPY * /app/
 
 RUN pip install -r requirements.txt
 
-CMD python app.py
+CMD python3 app.py
