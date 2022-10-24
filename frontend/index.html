@@ -51,7 +51,7 @@
         var blocks = {};
         var connections = {};
         var edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
-        var block_data = {}; // convention: {type: source/join/etc., properties: {}, data-ref: ..directory + file, header: Array(...), data: Array(Array()...Array())}
+        var block_data = {}; // convention: {type: source/join/etc., properties: {}, data-ref: ..directory + file, header: Array(...), data: Array(Array()...Array()), error: null/string}
         const API_BASE_URL = 'http://localhost:3000';
 
         var width = window.innerWidth;
@@ -72,6 +72,7 @@
           var layer = new Konva.Layer({
             draggable: true,
             id: block_id,
+            name: block_id,
             x: rectX,
             y: rectY
           });
@@ -79,7 +80,7 @@
           var box = new Konva.Rect({
             width: 100,
             height: 50,
-            fill: '#00D2FF',
+            fill: 'lightblue',
             stroke: 'black',
             strokeWidth: 4,
             name: 'box'
@@ -314,10 +315,11 @@
               var block = $.fn.blockFactory();
               blocks[block.attrs.id] = block;
               stage.add(block);
-              block_data[block.attrs.id] = {'type': 'data-source', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null};
+              block_data[block.attrs.id] = {'type': 'data-source', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'error': null};
+              let name = data_source.split('/')[data_source.split('/').length - 1];
+              $.fn.setBlockName(block.attrs.id, name);
 
-              var box_text = data_source.split('/')[data_source.split('/').length - 1];
-              $.fn.updateBlockText(block.attrs.id, box_text);
+              $.fn.updateBlockText(block.attrs.id);
 
               var asset = $.fn.loadRawAsset(block.attrs.id, data_source);
             }
@@ -329,10 +331,9 @@
             blocks[block.attrs.id] = block;
             stage.add(block);
 
-            var box_text = 'join';
-            $.fn.updateBlockText(block.attrs.id, box_text);
+            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
 
-            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null};
+            $.fn.updateBlockText(block.attrs.id);
           }
         });
 
@@ -366,7 +367,39 @@
           document.body.style.cursor = 'default';
         }
 
-        $.fn.updateBlockText = (block_id, text) => {
+        $.fn.updateBlockText = (block_id) => {
+          if(block_data[block_id]['type'] == 'data-source') {
+            // We want to use the block name for the source, which is changed to the filename of the data source when the user first adds the block.
+            // However, the source changes upon the first run. The name is not updated when this happens, as the source changes to the model-owned version of the asset. 
+            var text = $.fn.getBlockName(block_id);
+          }
+          else if(block_data[block_id]['type'] == 'join'){
+            if ( ('left_block' in block_data[block_id]['properties'] && block_data[block_id]['properties']['left_block'] != null) && ('right_block' in block_data[block_id]['properties'] && block_data[block_id]['properties']['right_block'] != null)) {
+              let left_block = block_data[block_id]['properties']['left_block'];
+              let left_table = $.fn.getBlockName(left_block);
+
+              let right_block = block_data[block_id]['properties']['right_block'];
+              let right_table = $.fn.getBlockName(right_block);
+
+              let left_key = block_data[block_id]['properties']['left_key'];
+              let right_key = block_data[block_id]['properties']['right_key'];
+
+              let method = block_data[block_id]['properties']['method'];
+
+              var text = `
+              Join: (props)
+              Left Table: ${left_table}
+              Right Table: ${right_table}
+              Left Key: ${left_key}
+              Right Key: ${right_key}
+              Method: ${method}
+              `;
+            }
+            else {
+              var text = 'join';
+            }
+          }
+
           for (const child of blocks[block_id].children) {
             if (child.attrs.name == 'box_text') {
               child.text(text);
@@ -375,40 +408,41 @@
           $.fn.centerBlockText(block_id);
         }
 
-        $.fn.updateBlockProps = (block_id, props) => {
-          for (const prop_key in props) {
-            block_data[block_id]['properties'][prop_key] = props[prop_key];
+        $.fn.recolorBlock = (block_id) => {
+          if ( block_data[block_id]['error'] != null ){
+            var color = '#FFCCCB';
           }
+          else if ( block_data[block_id]['error'] == null && (block_data[block_id]['header'] != null || block_data[block_id]['data'] != null) ) {
+            var color = '#CCFFCD';
+          }
+          else if ( block_data[block_id]['error'] == null && block_data[block_id]['header'] == null && block_data[block_id]['data'] == null ) {
+            var color = 'lightblue';
+          }
+          for ( const child of blocks[block_id].children ) {
+            if (child.hasName('box')) {
+              child.fill(color);
+            }
+          }
+        }
 
-          // update the text
-          if(block_data[block_id]['type'] == 'join'){
-            const left_block = block_data[block_id]['properties']['left_block'];
-            var left_table = '';
-            for (const child of blocks[left_block].children) {
-              if (child.hasName('box_text')) {
-                left_table = child.attrs.text;
+        $.fn.updateBlockData = (block_id, updates) => {
+          for (const update_key in updates) {
+            if (update_key == 'properties') {
+              for (const prop_key in updates['properties']) {
+                if ( (!prop_key in block_data[block_id]) || block_data[block_id]['properties'][prop_key] != updates['properties'][prop_key]) {
+                  // We're nulling these because the transform properties have changed, thereby invalidating the current data.
+                  block_data[block_id]['header'] = null;
+                  block_data[block_id]['data'] = null;
+                  $.fn.clearTable();
+                }
+                block_data[block_id]['properties'][prop_key] = updates['properties'][prop_key];
               }
+            } else {
+              block_data[block_id][update_key] = updates[update_key];
             }
-            const right_block = block_data[block_id]['properties']['right_block'];
-            var right_table = '';
-            for (const child of blocks[right_block].children) {
-              if (child.hasName('box_text')) {
-                right_table = child.attrs.text;
-              }
-            }
-            const left_key = block_data[block_id]['properties']['left_key'];
-            const right_key = block_data[block_id]['properties']['right_key'];
-            const method = block_data[block_id]['properties']['method'];
-            const block_text = `
-            Join: (props)
-            Left Table: ${left_table}
-            Right Table: ${right_table}
-            Left Key: ${left_key}
-            Right Key: ${right_key}
-            Method: ${method}
-            `
-            $.fn.updateBlockText(block_id, block_text);
           }
+          $.fn.updateBlockText(block_id);
+          $.fn.recolorBlock(block_id);
         }
 
         $.fn.centerBlockText = (block_id) => {
@@ -511,11 +545,11 @@
         }
 
         $.fn.getBlockName = (block_id) => {
-          for (const child of blocks[block_id].children) {
-            if (child.attrs.name == 'box_text') {
-              return child.attrs.text;
-            }
-          }
+          return blocks[block_id].attrs.name;
+        }
+
+        $.fn.setBlockName = (block_id, name) => {
+          blocks[block_id].name(name);
         }
 
         $.fn.hideBlockProps = () => {
@@ -596,10 +630,12 @@
                 }
 
                 left_key_select.addEventListener('change', function() {
-                  var props = {
-                    'left_key': left_key_select.value
+                  var update_data = {
+                    'properties': {
+                      'left_key': left_key_select.value
+                    }
                   }
-                  $.fn.updateBlockProps(block_id, props);
+                  $.fn.updateBlockData(block_id, update_data);
                 });
 
                 left_block_select.addEventListener('change', function(){
@@ -612,10 +648,13 @@
                     left_key_select.appendChild(left_key_select_option);
                     left_key_select_options.push(header_item);
                   }
-                  var props = {
-                    'left_block': left_block_select.value
+                  var update_data = {
+                    'properties': {
+                      'left_block': left_block_select.value,
+                      'left_key': left_key_select.value
+                    }
                   }
-                  $.fn.updateBlockProps(block_id, props);
+                  $.fn.updateBlockData(block_id, update_data);
                 });
 
                 document.getElementById('transform_props').appendChild(left_key_select_label);
@@ -640,10 +679,12 @@
                 }
 
                 right_key_select.addEventListener('change', function(){
-                  var props = {
-                    'right_key': right_key_select.value
+                  var update_data = {
+                    'properties': {
+                      'right_key': right_key_select.value
+                    }
                   }
-                  $.fn.updateBlockProps(block_id, props);
+                  $.fn.updateBlockData(block_id, update_data);
                 })
 
                 right_block_select.addEventListener('change', function(){
@@ -656,10 +697,13 @@
                     right_key_select.appendChild(right_key_select_option);
                     right_key_select_options.push(header_item);
                   }
-                  var props = {
-                    'right_block': right_block_select.value
+                  var update_data = {
+                    'properties': {
+                      'right_block': right_block_select.value,
+                      'right_key': right_key_select.value
+                    }
                   }
-                  $.fn.updateBlockProps(block_id, props);
+                  $.fn.updateBlockData(block_id, update_data);
                 });
 
                 document.getElementById('transform_props').appendChild(right_key_select_label);
@@ -694,10 +738,12 @@
                 var method_select_options = ['left', 'right', 'outer', 'inner'];
 
                 method_select.addEventListener('change', function(){
-                  var props = {
-                    'method': method_select.value
+                  var update_data = {
+                    'properties': {
+                      'method': method_select.value
+                    }
                   }
-                  $.fn.updateBlockProps(block_id, props);
+                  $.fn.updateBlockData(block_id, update_data);
                 })
 
                 document.getElementById('transform_props').appendChild(method_select_label);
@@ -708,15 +754,16 @@
                     method_select.value = block_data[block_id]['properties']['method'];
                 }
 
-                var props = {
-                  'left_block': left_block_select.value,
-                  'right_block': right_block_select.value,
-                  'left_key': left_key_select.value,
-                  'right_key': right_key_select.value,
-                  'method': method_select.value
+                var update_data = {
+                  'properties': {
+                    'left_block': left_block_select.value,
+                    'right_block': right_block_select.value,
+                    'left_key': left_key_select.value,
+                    'right_key': right_key_select.value,
+                    'method': method_select.value
+                  }
                 }
-                $.fn.updateBlockProps(block_id, props);
-
+                $.fn.updateBlockData(block_id, update_data);
               }
           }
         }
@@ -800,20 +847,39 @@
           $.get( API_BASE_URL + '/get-raw-asset', {'asset': asset}, function(data) {
             var columns = data['columns'];
             var rows = data['data'];
-            block_data[block_id]['header'] = columns;
-            block_data[block_id]['data'] = rows;
+            var update_data = {
+              'header': columns,
+              'data': rows
+            }
+            $.fn.updateBlockData(block_id, update_data);
           });
         }
 
         $.fn.runModel = (model) => {
           $.get( API_BASE_URL + '/run-model', { 'model': JSON.stringify(model) }, function(data) {
             for (const block_id in data[model_id]) {
-              block_data[block_id]['data-ref'] = data[model_id][block_id]['data-ref'];
-              block_data[block_id]['header'] = data[model_id][block_id]['data']['columns'];
-              block_data[block_id]['data'] = data[model_id][block_id]['data']['data'];
+              if(data[model_id][block_id]['error'] != null){
+                var update_data = {
+                  'data-ref': null,
+                  'header': null,
+                  'data': null,
+                  'error': data[model_id][block_id]['error']
+                }
+              }
+              else {
+                var update_data = {
+                  'data-ref' : data[model_id][block_id]['data-ref'],
+                  'header' : data[model_id][block_id]['data']['columns'],
+                  'data' : data[model_id][block_id]['data']['data'],
+                  'error': null
+                }
+              }
+              $.fn.updateBlockData(block_id, update_data);
             }
-            if (selected_block_id != null){
+            if (selected_block_id != null && (block_data[selected_block_id]['header'] != null || block_data[selected_block_id]['data'] != null)){
               $.fn.populateTable(block_data[selected_block_id]['header'], block_data[selected_block_id]['data']);
+            } else {
+              $.fn.clearTable();
             }
           });
         }
