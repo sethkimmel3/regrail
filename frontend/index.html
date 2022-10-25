@@ -621,6 +621,12 @@
               elem.id = id;
               span.appendChild(elem);
             break;
+            case 'text-input':
+              var elem = document.createElement('input');
+              elem.type = 'text';
+              elem.id = id;
+              elem.innerHTML = innerHTML;
+              span.appendChild(elem);
           }
           return span;
         }
@@ -782,8 +788,23 @@
                 document.getElementById('transform-props').appendChild(column_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
-                var value_input_label = document.createElement('label');
-                value_input_label.innerHTML = 'Value: ';
+
+                var operator_select_options = {};
+                operator_select_options['eq'] = '=';
+                operator_select_options['less'] = '<';
+                operator_select_options['greater'] = '>';
+                operator_select_options['leq'] = '<=';
+                operator_select_options['gte'] = '>=';
+
+                var operator_select = $.fn.transformPropFactory('select', 'Operator: ', '', 'operator-select', '', operator_select_options);
+
+                document.getElementById('transform-props').appendChild(operator_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+                var value_input = $.fn.transformPropFactory('text-input', 'Value: ', '', 'value-select', '');
+
+                document.getElementById('transform-props').appendChild(value_input);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
               }
             break;
           }
