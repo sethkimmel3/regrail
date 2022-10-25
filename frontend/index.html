@@ -672,18 +672,13 @@
                   }
                 }
 
-                var left_key_select = $.fn.transformPropFactory('select', 'Left Key: ', '', 'left-key-select' ,'', left_key_select_options);
+                var left_key_select = $.fn.transformPropFactory('select', 'Left Key: ', '', 'left-key-select', '', left_key_select_options);
 
                 document.getElementById('transform-props').appendChild(left_key_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 document.getElementById('left-key-select').addEventListener('change', function() {
-                  var update_data = {
-                    'properties': {
-                      'left_key': document.getElementById('left-key-select').value
-                    }
-                  }
-                  $.fn.updateBlockData(block_id, update_data);
+                  $.fn.updateJoinData();
                 });
 
                 document.getElementById('left-block-select').addEventListener('change', function(){
@@ -696,13 +691,7 @@
                     left_key_select_option.innerHTML = header_item;
                     document.getElementById('left-key-select').appendChild(left_key_select_option);
                   }
-                  var update_data = {
-                    'properties': {
-                      'left_block': document.getElementById('left-block-select').value,
-                      'left_key': document.getElementById('left-key-select').value
-                    }
-                  }
-                  $.fn.updateBlockData(block_id, update_data);
+                  $.fn.updateJoinData();
                 });
 
                 document.getElementById('left-key-select').value = Object.keys(left_key_select_options)[0];
@@ -717,18 +706,13 @@
                   }
                 }
 
-                var right_key_select = $.fn.transformPropFactory('select', 'Right Key: ', '', 'right-key-select' ,'', right_key_select_options);
+                var right_key_select = $.fn.transformPropFactory('select', 'Right Key: ', '', 'right-key-select', '', right_key_select_options);
 
                 document.getElementById('transform-props').appendChild(right_key_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 document.getElementById('right-key-select').addEventListener('change', function() {
-                  var update_data = {
-                    'properties': {
-                      'right_key': document.getElementById('right-key-select').value
-                    }
-                  }
-                  $.fn.updateBlockData(block_id, update_data);
+                  $.fn.updateJoinData();
                 });
 
                 document.getElementById('right-block-select').addEventListener('change', function(){
@@ -741,13 +725,7 @@
                     right_key_select_option.innerHTML = header_item;
                     document.getElementById('right-key-select').appendChild(right_key_select_option);
                   }
-                  var update_data = {
-                    'properties': {
-                      'right_block': document.getElementById('right-block-select').value,
-                      'right_key': document.getElementById('right-key-select').value
-                    }
-                  }
-                  $.fn.updateBlockData(block_id, update_data);
+                  $.fn.updateJoinData();
                 });
 
                 document.getElementById('right-key-select').value = Object.keys(right_key_select_options)[0];
@@ -766,24 +744,23 @@
                 }
 
                 document.getElementById('method-select').addEventListener('change', function(){
+                  $.fn.updateJoinData();
+                })
+
+                $.fn.updateJoinData = () => {
                   var update_data = {
                     'properties': {
+                      'left_block': document.getElementById('left-block-select').value,
+                      'right_block': document.getElementById('right-block-select').value,
+                      'left_key': document.getElementById('left-key-select').value,
+                      'right_key': document.getElementById('right-key-select').value,
                       'method': document.getElementById('method-select').value
                     }
                   }
                   $.fn.updateBlockData(block_id, update_data);
-                })
-
-                var update_data = {
-                  'properties': {
-                    'left_block': document.getElementById('left-block-select').value,
-                    'right_block': document.getElementById('right-block-select').value,
-                    'left_key': document.getElementById('left-key-select').value,
-                    'right_key': document.getElementById('right-key-select').value,
-                    'method': document.getElementById('method-select').value
-                  }
                 }
-                $.fn.updateBlockData(block_id, update_data);
+                $.fn.updateJoinData();
+
               }
             break;
             case 'filter-rows':
@@ -793,22 +770,15 @@
               } else {
                 var parent_id = parents[0];
 
-                var column_select_label = document.createElement('label');
-                column_select_label.innerHTML = 'Column: ';
-
-                var column_select_options = [];
-                var column_select = document.createElement('select');
+                var column_select_options = {};
                 if ( block_data[parent_id]['header'] != null) {
                   for (const header_item of block_data[parent_id]['header']){
-                    var column_select_option = document.createElement('option');
-                    column_select_option.value = header_item;
-                    column_select_option.innerHTML = header_item;
-                    column_select.appendChild(column_select_option);
-                    column_select_options.push(header_item);
+                    column_select_options[header_item] = header_item;
                   }
                 }
 
-                document.getElementById('transform-props').appendChild(column_select_label);
+                var column_select = $.fn.transformPropFactory('select', 'Column: ', '', 'column-select', '', column_select_options);
+
                 document.getElementById('transform-props').appendChild(column_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
