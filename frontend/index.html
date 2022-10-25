@@ -27,13 +27,16 @@
       </select>
       <button id="add-block" type="button">Add</button>
       <button id="compile-model" type="button">Compile + Run</button>
+      <button id="run-to-selected" type="button">Run to Selected</button>
+      <br>
+      <span id="selected-block">Selected Block:</span>
     </div>
 
     <div id="flow"></div>
 
     <table id="data-table" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;top:0px;right:0px;"></table>
-
-    <div id="transform_props" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;bottom:0px;right:0px;"></div>
+    <p id="error-message" style="max-width:33%;max-height:50%;position:absolute;top:0px;right:0px;color:red;"></p>
+    <div id="transform-props" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;bottom:0px;right:0px;"></div>
   </div>
 	<script>
     $( document ).ready(function(){
@@ -97,9 +100,9 @@
           });
 
           var x_text = new Konva.Text({
-            text: 'X',
-            x: - 4,
-            y: - 4
+            text: 'x',
+            x: - 3,
+            y: - 6
           });
 
           var edge_circle = new Konva.Circle({
@@ -331,7 +334,7 @@
             blocks[block.attrs.id] = block;
             stage.add(block);
 
-            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left': null, 'right': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
 
             $.fn.updateBlockText(block.attrs.id);
           }
@@ -370,7 +373,7 @@
         $.fn.updateBlockText = (block_id) => {
           if(block_data[block_id]['type'] == 'data-source') {
             // We want to use the block name for the source, which is changed to the filename of the data source when the user first adds the block.
-            // However, the source changes upon the first run. The name is not updated when this happens, as the source changes to the model-owned version of the asset. 
+            // However, the source changes upon the first run. The name is not updated when this happens, as the source changes to the model-owned version of the asset.
             var text = $.fn.getBlockName(block_id);
           }
           else if(block_data[block_id]['type'] == 'join'){
@@ -507,24 +510,36 @@
           $.fn.reRenderConnections(block_id);
         }
 
+        $.fn.displayBlockState = (block_id) => {
+          if ( block_data[block_id]['error'] != null ) {
+            document.getElementById('error-message').innerHTML = block_data[block_id]['error'];
+          } else {
+            document.getElementById('error-message').innerHTML = '';
+          }
+          $.fn.populateTable(block_data[block_id]['header'], block_data[block_id]['data']);
+        }
+
         $.fn.populateTable = (header, data) => {
           document.getElementById('data-table').replaceChildren();
-          var headerRow = document.createElement('tr');
-          for (const item of header){
-            var cell = document.createElement('th');
-            cell.innerHTML = item;
-            headerRow.appendChild(cell);
-          }
-          document.getElementById('data-table').appendChild(headerRow);
-
-          for (const row of data){
-            var tableRow = document.createElement('tr');
-            for (const item of Object.values(row)){
-              var cell = document.createElement('td');
+          if (header != null) {
+            var headerRow = document.createElement('tr');
+            for (const item of header){
+              var cell = document.createElement('th');
               cell.innerHTML = item;
-              tableRow.append(cell);
+              headerRow.appendChild(cell);
             }
-            document.getElementById('data-table').appendChild(tableRow);
+            document.getElementById('data-table').appendChild(headerRow);
+          }
+          if (data != null) {
+            for (const row of data){
+              var tableRow = document.createElement('tr');
+              for (const item of Object.values(row)){
+                var cell = document.createElement('td');
+                cell.innerHTML = item;
+                tableRow.append(cell);
+              }
+              document.getElementById('data-table').appendChild(tableRow);
+            }
           }
         }
 
@@ -553,11 +568,11 @@
         }
 
         $.fn.hideBlockProps = () => {
-          document.getElementById('transform_props').replaceChildren();
+          document.getElementById('transform-props').replaceChildren();
         }
 
         $.fn.showBlockProps = (block_id) => {
-          document.getElementById('transform_props').replaceChildren();
+          document.getElementById('transform-props').replaceChildren();
           var type = block_data[block_id]['type'];
 
           // TODO: Dynamically build config picker here
@@ -584,9 +599,9 @@
                 left_block_select.appendChild(left_block_select_option_1);
                 left_block_select.appendChild(left_block_select_option_2);
 
-                document.getElementById('transform_props').appendChild(left_block_select_label);
-                document.getElementById('transform_props').appendChild(left_block_select);
-                document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                document.getElementById('transform-props').appendChild(left_block_select_label);
+                document.getElementById('transform-props').appendChild(left_block_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 if (block_data[block_id]['properties'] != null && left_block_select_options.includes(block_data[block_id]['properties']['left_block'])) {
                     left_block_select.value = block_data[block_id]['properties']['left_block'];
@@ -608,9 +623,9 @@
                 right_block_select.appendChild(right_block_select_option_1);
                 right_block_select.appendChild(right_block_select_option_2);
 
-                document.getElementById('transform_props').appendChild(right_block_select_label);
-                document.getElementById('transform_props').appendChild(right_block_select);
-                document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                document.getElementById('transform-props').appendChild(right_block_select_label);
+                document.getElementById('transform-props').appendChild(right_block_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 if (block_data[block_id]['properties'] != null && right_block_select_options.includes(block_data[block_id]['properties']['right_block'])){
                     right_block_select.value = block_data[block_id]['properties']['right_block'];
@@ -621,12 +636,14 @@
 
                 var left_key_select_options = [];
                 var left_key_select = document.createElement('select');
-                for (const header_item of block_data[left_block_select.value]['header']){
-                  var left_key_select_option = document.createElement('option');
-                  left_key_select_option.value = header_item;
-                  left_key_select_option.innerHTML = header_item;
-                  left_key_select.appendChild(left_key_select_option);
-                  left_key_select_options.push(header_item);
+                if ( block_data[left_block_select.value]['header'] != null) {
+                  for (const header_item of block_data[left_block_select.value]['header']){
+                    var left_key_select_option = document.createElement('option');
+                    left_key_select_option.value = header_item;
+                    left_key_select_option.innerHTML = header_item;
+                    left_key_select.appendChild(left_key_select_option);
+                    left_key_select_options.push(header_item);
+                  }
                 }
 
                 left_key_select.addEventListener('change', function() {
@@ -657,9 +674,9 @@
                   $.fn.updateBlockData(block_id, update_data);
                 });
 
-                document.getElementById('transform_props').appendChild(left_key_select_label);
-                document.getElementById('transform_props').appendChild(left_key_select);
-                document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                document.getElementById('transform-props').appendChild(left_key_select_label);
+                document.getElementById('transform-props').appendChild(left_key_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 if (block_data[block_id]['properties'] != null && left_key_select_options.includes(block_data[block_id]['properties']['left_key'])){
                     left_key_select.value = block_data[block_id]['properties']['left_key'];
@@ -670,12 +687,14 @@
 
                 var right_key_select_options = [];
                 var right_key_select = document.createElement('select');
-                for (const header_item of block_data[right_block_select.value]['header']){
-                  var right_key_select_option = document.createElement('option');
-                  right_key_select_option.value = header_item;
-                  right_key_select_option.innerHTML = header_item;
-                  right_key_select.appendChild(right_key_select_option);
-                  right_key_select_options.push(header_item);
+                if ( block_data[right_block_select.value]['header'] != null ) {
+                  for (const header_item of block_data[right_block_select.value]['header']){
+                    var right_key_select_option = document.createElement('option');
+                    right_key_select_option.value = header_item;
+                    right_key_select_option.innerHTML = header_item;
+                    right_key_select.appendChild(right_key_select_option);
+                    right_key_select_options.push(header_item);
+                  }
                 }
 
                 right_key_select.addEventListener('change', function(){
@@ -706,9 +725,9 @@
                   $.fn.updateBlockData(block_id, update_data);
                 });
 
-                document.getElementById('transform_props').appendChild(right_key_select_label);
-                document.getElementById('transform_props').appendChild(right_key_select);
-                document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                document.getElementById('transform-props').appendChild(right_key_select_label);
+                document.getElementById('transform-props').appendChild(right_key_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 if (block_data[block_id]['properties'] != null && right_key_select_options.includes(block_data[block_id]['properties']['right_key'])){
                     right_key_select.value = block_data[block_id]['properties']['right_key'];
@@ -746,9 +765,9 @@
                   $.fn.updateBlockData(block_id, update_data);
                 })
 
-                document.getElementById('transform_props').appendChild(method_select_label);
-                document.getElementById('transform_props').appendChild(method_select);
-                document.getElementById('transform_props').appendChild(document.createElement('BR'));
+                document.getElementById('transform-props').appendChild(method_select_label);
+                document.getElementById('transform-props').appendChild(method_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 if (block_data[block_id]['properties'] != null && method_select_options.includes(block_data[block_id]['properties']['method'])){
                     method_select.value = block_data[block_id]['properties']['method'];
@@ -783,51 +802,89 @@
             }
             $.fn.setBlockStroke(block.attrs.id, 'yellow');
             selected_block_id = block.attrs.id;
-            if ( block_data[block.attrs.id]['header'] == null && block_data[block.attrs.id]['data'] == null ){
-              $.fn.clearTable();
-            } else {
-              $.fn.populateTable(block_data[block.attrs.id]['header'], block_data[block.attrs.id]['data']);
-            }
+            $.fn.displayBlockState(block.attrs.id);
             $.fn.showBlockProps(block.attrs.id);
           }
           else {
             $.fn.setBlockStroke(block.attrs.id, 'black');
             selected_block_id = null;
-            $.fn.clearTable();
+            $.fn.displayBlockState(block.attrs.id);
             $.fn.hideBlockProps();
           }
+          if (selected_block_id == null) {
+            var name = '';
+          }
+          else {
+            var name = $.fn.getBlockName(selected_block_id);
+          }
+          document.getElementById('selected-block').innerHTML = 'Selected Block: ' + name;
         }
 
-        $.fn.compileModel = () => {
-          var blocks_array = {};
-          for (const block_id of Object.keys(blocks)) {
-            blocks_array[block_id] = {
-              'type': block_data[block_id]['type'],
-              'properties': block_data[block_id]['properties'],
-              'data-ref': block_data[block_id]['data-ref']
+        $.fn.validateBlocks = function(block_set) {
+          var block_errors = {};
+          for (const block_id of Object.keys(block_set)) {
+            var type = block_data[block_id]['type'];
+            switch (type) {
+              case 'join':
+                if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['left_block'] == null || block_data[block_id]['properties']['left_key'] == null || block_data[block_id]['properties']['right_block'] == null || block_data[block_id]['properties']['right_key'] == null) {
+                  block_errors[block_id] = 'You must select join properties.';
+                }
+                break;
             }
           }
+          return block_errors;
+        }
 
-          var edges_array = {};
-          for (const edge of edges) {
-            edges_array[edge['connector']] = {
-              'from': edge['from'],
-              'to': edge['to']
-            }
+        $.fn.compileModel = (block_set=null, edge_set=null) => {
+          // we want to be able to pass model subsets to the compiler
+          if (block_set == null) {
+            block_set = blocks;
           }
+          if (edge_set == null) {
+            edge_set = edges;
+          }
+          var block_errors = $.fn.validateBlocks(block_set);
+          if ( Object.keys(block_errors).length > 0 ) {
+            // TODO: we want to change this behavior, likely updating the blocks error message
+            var alert_text = '';
+            for ( const block_id of Object.keys(block_errors) ) {
+              alert_text += $.fn.getBlockName(block_id) + ': ' + block_errors[block_id] + '\n';
+            }
+            window.alert(alert_text);
+            return null;
+          } else {
+            var blocks_array = {};
+            for (const block_id of Object.keys(block_set)) {
+              blocks_array[block_id] = {
+                'type': block_data[block_id]['type'],
+                'properties': block_data[block_id]['properties'],
+                'data-ref': block_data[block_id]['data-ref']
+              }
+            }
 
-          let model = {
-            'model-id': model_id,
-            'blocks': blocks_array,
-            'edges': edges_array
-          };
+            var edges_array = {};
+            for (const edge of edge_set) {
+              edges_array[edge['connector']] = {
+                'from': edge['from'],
+                'to': edge['to']
+              }
+            }
 
-          return model;
+            let model = {
+              'model-id': model_id,
+              'blocks': blocks_array,
+              'edges': edges_array
+            };
+
+            return model;
+          }
         }
 
         $( document ).on('click', '#compile-model', function() {
           var model = $.fn.compileModel();
-          $.fn.runModel(model);
+          if ( model != null ) {
+            $.fn.runModel(model);
+          }
         })
 
         $.fn.fetchRawAssets = () => {
@@ -876,13 +933,44 @@
               }
               $.fn.updateBlockData(block_id, update_data);
             }
-            if (selected_block_id != null && (block_data[selected_block_id]['header'] != null || block_data[selected_block_id]['data'] != null)){
-              $.fn.populateTable(block_data[selected_block_id]['header'], block_data[selected_block_id]['data']);
-            } else {
-              $.fn.clearTable();
+            if (selected_block_id != null ){
+              $.fn.displayBlockState(selected_block_id);
             }
           });
         }
+
+        $.fn.getUpstreamModel = (block_id) => {
+          var blocks_to_include = {};
+          blocks_to_include[block_id] = blocks[block_id];
+          var edges_to_include = [];
+
+          var block_ids_to_process = [block_id];
+          var processing;
+          while (block_ids_to_process.length > 0) {
+            processing = block_ids_to_process.pop();
+            for (const edge of edges) {
+              if (edge['to'] == processing) {
+                if (!edges_to_include.includes(edge)) {
+                  edges_to_include.push(edge);
+                }
+                if (!(edge['from'] in blocks_to_include)) {
+                  blocks_to_include[edge['from']] = blocks[edge['from']];
+                  block_ids_to_process.push(edge['from']);
+                }
+              }
+            }
+          }
+
+          var compiled_model = $.fn.compileModel(blocks_to_include, edges_to_include);
+          return compiled_model;
+        }
+
+        $( document ).on('click', '#run-to-selected', function() {
+          var model = $.fn.getUpstreamModel(selected_block_id);
+          if ( model != null ) {
+            $.fn.runModel(model);
+          }
+        });
   });
   </script>
   </body>
