@@ -39,7 +39,7 @@ def create_directory_if_not_exists(directory):
         mkdir(directory)
 
 def process_block(model_id, block_id, parents, type, properties, data_ref):
-    if type == 'data-source':
+    if type == 'csv-file':
         if data_ref.split('/')[0] == 'raw_assets':
             # we want to re-store the raw data as a model asset
             raw_data = pd.read_csv(data_ref, skipinitialspace=True)
