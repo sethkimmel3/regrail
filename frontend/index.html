@@ -670,7 +670,7 @@
 
                 document.getElementById('right-block-select').value = Object.keys(right_block_select_options)[1];
                 if (block_data[block_id]['properties'] != null && Object.keys(right_block_select_options).includes(block_data[block_id]['properties']['right_block'])){
-                    right_block_select.value = block_data[block_id]['properties']['right_block'];
+                    document.getElementById('right-block-select').value = block_data[block_id]['properties']['right_block'];
                 }
 
                 var left_key_select_options = {};
