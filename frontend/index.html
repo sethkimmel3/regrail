@@ -371,16 +371,18 @@
             edges.splice(indices_to_remove[i], 1);
           }
 
-          // now remove the block
           if (block.attrs.id == selected_block_id) {
             selected_block_id = null;
+            document.getElementById('selected-block').innerHTML = 'Selected Block: ' ;
             $.fn.clearTable();
             $.fn.hideBlockProps();
           }
 
-          block.destroy();
+          // now remove the block
           delete blocks[block.attrs.id];
           delete block_data[block.attrs.id];
+
+          block.destroy();
           document.body.style.cursor = 'default';
         }
 
@@ -746,7 +748,7 @@
 
                 document.getElementById('method-select').value = Object.keys(method_select_options)[0];
                 if (block_data[block_id]['properties'] != null && Object.keys(method_select_options).includes(block_data[block_id]['properties']['method'])){
-                    method_select.value = block_data[block_id]['properties']['method'];
+                    document.getElementById('method-select').value = block_data[block_id]['properties']['method'];
                 }
 
                 document.getElementById('method-select').addEventListener('change', function(){
@@ -788,23 +790,61 @@
                 document.getElementById('transform-props').appendChild(column_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
+                document.getElementById('column-select').value = Object.keys(column_select_options)[0];
+                if (block_data[block_id]['properties'] != null && Object.keys(column_select_options).includes(block_data[block_id]['properties']['column_select'])) {
+                  document.getElementById('column-select').value = block_data[block_id]['properties']['column-select'];
+                }
 
                 var operator_select_options = {};
-                operator_select_options['eq'] = '=';
-                operator_select_options['less'] = '<';
-                operator_select_options['greater'] = '>';
-                operator_select_options['leq'] = '<=';
-                operator_select_options['gte'] = '>=';
+                operator_select_options['='] = '=';
+                operator_select_options['<'] = '<';
+                operator_select_options['>'] = '>';
+                operator_select_options['<='] = '<=';
+                operator_select_options['>='] = '>=';
 
                 var operator_select = $.fn.transformPropFactory('select', 'Operator: ', '', 'operator-select', '', operator_select_options);
 
                 document.getElementById('transform-props').appendChild(operator_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
+                document.getElementById('operator-select').value = Object.keys(operator_select_options)[0];
+                if (block_data[block_id]['properties'] != null && Object.keys(operator_select_options).includes(block_data[block_id]['properties']['operator'])) {
+                  document.getElementById('operator-select').value = block_data[block_id]['properties']['operator'];
+                }
+
                 var value_input = $.fn.transformPropFactory('text-input', 'Value: ', '', 'value-select', '');
 
                 document.getElementById('transform-props').appendChild(value_input);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+                document.getElementById('value-select').value = '';
+                if (block_data[block_id]['properties'] != null && block_data[block_id]['properties']['value'] != null) {
+                  document.getElementById('value-select').value = block_data[block_id]['properties']['value'];
+                }
+
+                $.fn.updateFilterData = () => {
+                  var update_data = {
+                    'properties': {
+                      'filter_column': document.getElementById('column-select').value,
+                      'operator': document.getElementById('operator-select').value,
+                      'value': document.getElementById('value-select').value
+                    }
+                  }
+                  $.fn.updateBlockData(block_id, update_data);
+                }
+                $.fn.updateFilterData();
+
+                document.getElementById('column-select').addEventListener('change', function() {
+                  $.fn.updateFilterData();
+                });
+
+                document.getElementById('operator-select').addEventListener('change', function() {
+                  $.fn.updateFilterData();
+                });
+
+                document.getElementById('value-select').addEventListener('keyup', function() {
+                  $.fn.updateFilterData();
+                });
               }
             break;
           }
@@ -834,6 +874,7 @@
             $.fn.displayBlockState(block.attrs.id);
             $.fn.hideBlockProps();
           }
+
           if (selected_block_id == null) {
             var name = '';
           }

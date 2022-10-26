@@ -72,10 +72,46 @@ def process_block(model_id, block_id, parents, type, properties, data_ref):
             merged.to_parquet(data_ref)
             data_dict = prepare_dataframe_for_return(merged)
             return data_ref, data_dict, None
+    elif type == 'filter-rows':
+        filter_column = properties['filter_column']
+        operator = properties['operator']
+        value = properties['value']
+
+        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+
+        # try to convert value to filter_column type
+        type = parent_data.dtypes[filter_column]
+        try:
+            # TODO: scope this way more extensively
+            if type == 'int64':
+                value = int(value)
+        except Exception as e:
+            return None, None, str(e)
+
+        try:
+            if operator == '=':
+                filtered = parent_data[parent_data[filter_column] == value]
+            elif operator == '<':
+                filtered = parent_data[parent_data[filter_column] < value]
+            elif operator == '>':
+                filtered = parent_data[parent_data[filter_column] > value]
+            elif operator == '<=':
+                filtered = parent_data[parent_data[filter_column] <= value]
+            elif operator == '>=':
+                filtered = parent_data[parent_data[filter_column] >= value]
+        except Exception as e:
+            return None, None, str(e)
+        else:
+            directory = '/'.join(['model_assets', model_id])
+            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
+            filtered.to_parquet(data_ref)
+            data_dict = prepare_dataframe_for_return(filtered)
+            return data_ref, data_dict, None
 
 @app.route('/run-model', methods=['GET'])
 def run_model():
     model = json.loads(request.args.get('model'))
+    print(model, flush=True)
     model_id = model['model-id']
     blocks = model['blocks']
     edges = model['edges']
@@ -89,7 +125,7 @@ def run_model():
     return_array[model_id] = {}
     for block_id in block_order:
         return_array[model_id][block_id] = {}
-        data_ref, data_dict, error = process_block(model_id, block_id, DG.predecessors(block_id), blocks[block_id]['type'], blocks[block_id]['properties'], blocks[block_id]['data-ref'])
+        data_ref, data_dict, error = process_block(model_id, block_id, list(DG.predecessors(block_id)), blocks[block_id]['type'], blocks[block_id]['properties'], blocks[block_id]['data-ref'])
         return_array[model_id][block_id]['data-ref'] = data_ref
         return_array[model_id][block_id]['data'] = data_dict
         return_array[model_id][block_id]['error'] = error
