@@ -27,6 +27,7 @@
         <option disabled>--------------------</option>
         <option value="join">Join</option>
         <option value="filter-rows">Filter Rows</option>
+        <option value="order">Order</option>
       </select>
       <select name="data-select" id="data-select">
       </select>
@@ -351,6 +352,15 @@
 
               $.fn.updateBlockText(block.attrs.id);
             break;
+            case 'order':
+              var block = $.fn.blockFactory();
+              blocks[block.attrs.id] = block;
+              stage.add(block);
+
+              block_data[block.attrs.id] = {'type': 'order', 'properties': {'order_columns': null, 'asc_desc': null}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+
+              $.fn.updateBlockText(block.attrs.id);
+            break;
           }
         });
 
@@ -436,6 +446,26 @@
               else {
                 var text = 'row filter';
               }
+            break;
+            case 'order':
+              if ( ('order_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['order_columns'] != null) && ('asc_desc' in block_data[block_id]['properties'] && block_data[block_id]['properties']['asc_desc'] != null) ) {
+                let asc_desc = block_data[block_id]['properties']['asc_desc'];
+
+                let asc_desc_items = [];
+                for (const key of Object.keys(asc_desc)) {
+                  asc_desc_items.push(key + ': ' + asc_desc[key])
+                }
+
+                let asc_desc_text = asc_desc_items.join(', ');
+
+                var text = `
+                Order By:
+                ${asc_desc_text}
+                `;
+              }
+              else {
+                var text = 'order by';
+              }
           }
 
           for (const child of blocks[block_id].children) {
@@ -467,7 +497,7 @@
           for (const update_key in updates) {
             if (update_key == 'properties') {
               for (const prop_key in updates['properties']) {
-                if ( (!prop_key in block_data[block_id]) || block_data[block_id]['properties'][prop_key] != updates['properties'][prop_key]) {
+                if ( (!prop_key in block_data[block_id]['properties']) || block_data[block_id]['properties'][prop_key] != updates['properties'][prop_key]) {
                   // We're nulling these because the transform properties have changed, thereby invalidating the current data.
                   block_data[block_id]['header'] = null;
                   block_data[block_id]['data'] = null;
@@ -622,6 +652,32 @@
               }
               elem.id = id;
               span.appendChild(elem);
+            break;
+            case 'multi-select':
+              var elem = document.createElement('select');
+              for (const select_key of Object.keys(select_options)) {
+                var option = document.createElement('option');
+                option.value = select_key;
+                option.innerHTML = select_options[select_key];
+                elem.appendChild(option);
+              }
+              elem.id = id;
+              span.appendChild(elem);
+              var add_button = document.createElement('button');
+              add_button.id = id + '-add';
+              add_button.innerHTML = 'add';
+              span.appendChild(add_button);
+              var remove_button = document.createElement('button');
+              remove_button.id = id + '-remove';
+              remove_button.innerHTML = 'remove';
+              span.appendChild(remove_button);
+              span.appendChild(document.createElement('BR'));
+              var selected_label = document.createElement('label');
+              selected_label.innerHTML = 'Selected: ';
+              span.appendChild(selected_label);
+              var selected_list = document.createElement('span');
+              selected_list.id = id + '-selected';
+              span.appendChild(selected_list);
             break;
             case 'text-input':
               var elem = document.createElement('input');
@@ -785,14 +841,15 @@
                   }
                 }
 
+                // TODO: sort by actual column order
                 var column_select = $.fn.transformPropFactory('select', 'Column: ', '', 'column-select', '', column_select_options);
 
                 document.getElementById('transform-props').appendChild(column_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
 
                 document.getElementById('column-select').value = Object.keys(column_select_options)[0];
-                if (block_data[block_id]['properties'] != null && Object.keys(column_select_options).includes(block_data[block_id]['properties']['column_select'])) {
-                  document.getElementById('column-select').value = block_data[block_id]['properties']['column-select'];
+                if (block_data[block_id]['properties'] != null && Object.keys(column_select_options).includes(block_data[block_id]['properties']['filter_column'])) {
+                  document.getElementById('column-select').value = block_data[block_id]['properties']['filter_column'];
                 }
 
                 var operator_select_options = {};
@@ -812,7 +869,7 @@
                   document.getElementById('operator-select').value = block_data[block_id]['properties']['operator'];
                 }
 
-                var value_input = $.fn.transformPropFactory('text-input', 'Value: ', '', 'value-select', '');
+                var value_input = $.fn.transformPropFactory('text-input', 'Value (use comma separated vals in [] for multiple): ', '', 'value-select', '');
 
                 document.getElementById('transform-props').appendChild(value_input);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
@@ -847,6 +904,110 @@
                 });
               }
             break;
+            case 'order':
+              var parents = $.fn.getBlockParents(block_id);
+              if (parents.length != 1){
+                window.alert('Row filter must have one parent!');
+              } else {
+                var parent_id = parents[0];
+
+                var column_select_options = {};
+                if ( block_data[parent_id]['header'] != null) {
+                  for (const header_item of block_data[parent_id]['header']){
+                    column_select_options[header_item] = header_item;
+                  }
+                }
+
+                // TODO: sort by actual column order
+                var column_select = $.fn.transformPropFactory('multi-select', 'Select Column(s) to Order By: ', '', 'column-select', '', column_select_options);
+
+                var block_data_order_columns_deep;
+                var block_data_order_columns = block_data[block_id]['properties']['order_columns'];
+                if (block_data_order_columns == null){
+                  block_data_order_columns = [];
+                }
+
+                var block_data_asc_desc_deep; 
+                var block_data_asc_desc = block_data[block_id]['properties']['asc_desc'];
+                if ( block_data_asc_desc == null ) {
+                  block_data_asc_desc = {};
+                }
+
+                document.getElementById('transform-props').appendChild(column_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+                document.getElementById('column-select').value = Object.keys(column_select_options)[0];
+
+                document.getElementById('column-select-add').addEventListener('click', function(){
+                  var column_select_val = document.getElementById('column-select').value;
+                  if(!block_data_order_columns.includes(column_select_val)) {
+                    block_data_order_columns.push(column_select_val);
+                  }
+                  if(!column_select_val in block_data_asc_desc) {
+                    block_data_asc_desc[column_select_val] = null;
+                  }
+                  document.getElementById('column-select-selected').innerHTML = block_data_order_columns;
+                  $.fn.createAscDescElems();
+                  $.fn.updateOrderData();
+                });
+
+                document.getElementById('column-select-remove').addEventListener('click', function(){
+                  var column_select_val = document.getElementById('column-select').value;
+                  if (block_data_order_columns.includes(column_select_val)){
+                    var index = block_data_order_columns.indexOf(column_select_val);
+                    block_data_order_columns.splice(index, 1);
+                  }
+                  if(column_select_val in block_data_asc_desc) {
+                    delete block_data_asc_desc[column_select_val];
+                  }
+                  document.getElementById('column-select-selected').innerHTML = block_data_order_columns;
+                  $.fn.createAscDescElems();
+                  $.fn.updateOrderData();
+                });
+
+                $.fn.createAscDescElems = () => {
+                  if (!document.getElementById('asc-desc-elems')) {
+                    var asc_desc_elems = document.createElement('div');
+                    asc_desc_elems.id = 'asc-desc-elems';
+                    document.getElementById('transform-props').appendChild(asc_desc_elems);
+                  } else {
+                    document.getElementById('asc-desc-elems').replaceChildren();
+                  }
+
+                  for (const column of block_data_order_columns) {
+                    var asc_desc_options = {};
+                    asc_desc_options['asc'] = 'asc';
+                    asc_desc_options['desc'] = 'desc';
+                    var asc_desc = $.fn.transformPropFactory('select', column + ': ', '', 'asc-desc-select-' + column, '', asc_desc_options);
+                    document.getElementById('asc-desc-elems').appendChild(asc_desc);
+                    document.getElementById('asc-desc-elems').appendChild(document.createElement('BR'));
+
+                    if ( column in Object.keys(block_data_asc_desc)) {
+                      document.getElementById('asc-desc-select-' + column).value = block_data_asc_desc[column];
+                    } else{
+                      document.getElementById('asc-desc-select-' + column).value = Object.keys(asc_desc_options)[0];
+                      block_data_asc_desc[column] = Object.keys(asc_desc_options)[0];
+                    }
+
+                    document.getElementById('asc-desc-select-' + column).addEventListener('change', function(){
+                      block_data_asc_desc[column] = this.value;
+                      $.fn.updateOrderData();
+                    });
+                  }
+                }
+
+                $.fn.updateOrderData = () => {
+                  var update_data = {
+                    'properties': {
+                      'order_columns': block_data_order_columns,
+                      'asc_desc': block_data_asc_desc
+                    }
+                  }
+                  $.fn.updateBlockData(block_id, update_data);
+                }
+
+                $.fn.updateOrderData();
+              }
           }
         }
 
@@ -893,7 +1054,20 @@
                 if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['left_block'] == null || block_data[block_id]['properties']['left_key'] == null || block_data[block_id]['properties']['right_block'] == null || block_data[block_id]['properties']['right_key'] == null) {
                   block_errors[block_id] = 'You must select join properties.';
                 }
-                break;
+              break;
+              case 'filter-rows':
+                if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['filter_column'] == null || block_data[block_id]['properties']['operator'] == null || block_data[block_id]['properties']['value'] == null) {
+                  block_errors[block_id] = 'You must select row filter properties.';
+                }
+                else if (block_data[block_id]['properties']['operator'] != '=' && (block_data[block_id]['properties']['value'].charAt(0) && block_data[block_id]['properties']['value'].charAt(block_data[block_id]['properties']['value'].length - 1))){
+                  block_errors[block_id] = 'You cannot select multiple values unless using = operator.';
+                }
+              break;
+              case 'order':
+                if (block_data[block_id]['properties'] == null || (block_data[block_id]['properties']['order_columns'] == null || block_data[block_id]['properties']['order_columns'].length == 0) || (block_data[block_id]['properties']['asc_desc'] == null || Object.keys(block_data[block_id]['properties']['asc_desc']).length == 0)) {
+                  block_errors[block_id] = 'You must select row filter properties.';
+                }
+              break;
             }
           }
           return block_errors;

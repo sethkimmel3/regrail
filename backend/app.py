@@ -79,18 +79,31 @@ def process_block(model_id, block_id, parents, type, properties, data_ref):
 
         parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
 
+        if value[0] == '[' and value[-1] == ']':
+            multi = True
+            values = value[1:-1].split(',')
+            values = [value.strip() for value in values]
+        else:
+            multi = False
+
         # try to convert value to filter_column type
         type = parent_data.dtypes[filter_column]
         try:
             # TODO: scope this way more extensively
             if type == 'int64':
-                value = int(value)
+                if multi:
+                    values = [int(value) for value in values]
+                else:
+                    value = int(value)
         except Exception as e:
             return None, None, str(e)
 
         try:
             if operator == '=':
-                filtered = parent_data[parent_data[filter_column] == value]
+                if multi:
+                    filtered = parent_data[parent_data[filter_column].isin(values)]
+                else:
+                    filtered = parent_data[parent_data[filter_column] == value]
             elif operator == '<':
                 filtered = parent_data[parent_data[filter_column] < value]
             elif operator == '>':
@@ -106,6 +119,29 @@ def process_block(model_id, block_id, parents, type, properties, data_ref):
             data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
             filtered.to_parquet(data_ref)
             data_dict = prepare_dataframe_for_return(filtered)
+            return data_ref, data_dict, None
+    elif type == 'order':
+        order_columns = properties['order_columns']
+        asc_desc = properties['asc_desc']
+
+        asc_desc_bools = []
+        for column in order_columns:
+            if asc_desc[column] == 'asc':
+                asc_desc_bools.append(True)
+            elif asc_desc[column] == 'desc':
+                asc_desc_bools.append(False)
+
+        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+
+        try:
+            ordered = parent_data.sort_values(by=order_columns, ascending=asc_desc_bools)
+        except:
+            return None, None, str(e)
+        else:
+            directory = '/'.join(['model_assets', model_id])
+            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
+            ordered.to_parquet(data_ref)
+            data_dict = prepare_dataframe_for_return(ordered)
             return data_ref, data_dict, None
 
 @app.route('/run-model', methods=['GET'])
