@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-box_textatible" content="ie=edge">
-    <script src="https://unpkg.com/konva@8.3.12/konva.min.js"></script>
+    <script src="scripts/konva.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
     <title>ReGrail</title>
@@ -28,6 +28,7 @@
         <option value="join">Join</option>
         <option value="filter-rows">Filter Rows</option>
         <option value="order">Order</option>
+        <option value="drop-columns">Drop Columns</option>
       </select>
       <select name="data-select" id="data-select">
       </select>
@@ -40,9 +41,9 @@
 
     <div id="flow"></div>
 
-    <table id="data-table" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;top:0px;right:0px;"></table>
+    <table id="data-table" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;top:35px;right:35px;"></table>
     <p id="error-message" style="max-width:33%;max-height:50%;position:absolute;top:0px;right:0px;color:red;"></p>
-    <div id="transform-props" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;bottom:0px;right:0px;"></div>
+    <div id="transform-props" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;bottom:15px;right:15px;"></div>
   </div>
 	<script>
     $( document ).ready(function(){
@@ -75,15 +76,12 @@
         $.fn.blockFactory = function(){
           var block_id = "block-" + Math.random().toString(16).slice(2);
 
-          var rectX = 50;
-          var rectY = 50;
-
           var layer = new Konva.Layer({
             draggable: true,
             id: block_id,
             name: block_id,
-            x: rectX,
-            y: rectY
+            x: 75,
+            y: 75
           });
 
           var box = new Konva.Rect({
@@ -308,7 +306,7 @@
             from_block = null;
           }
           else if (!drawing_connection && (e.target.hasName('box') || e.target.hasName('box_text')) && !e.target.hasName('edge_circle') && !e.target.hasName('edge_text')){
-            $.fn.toggleSelectedBlock(e.target.parent);
+            $.fn.toggleSelectedBlock(e.target.parent.attrs.id);
           }
         })
 
@@ -329,7 +327,7 @@
                 let name = data_source.split('/')[data_source.split('/').length - 1];
                 $.fn.setBlockName(block.attrs.id, name);
 
-                $.fn.updateBlockText(block.attrs.id);
+                $.fn.blockDataUpdated(block.attrs.id);
 
                 var asset = $.fn.loadRawAsset(block.attrs.id, data_source);
               }
@@ -341,7 +339,7 @@
 
               block_data[block.attrs.id] = {'type': 'join', 'properties': {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
 
-              $.fn.updateBlockText(block.attrs.id);
+              $.fn.blockDataUpdated(block.attrs.id);
             break;
             case 'filter-rows':
               var block = $.fn.blockFactory();
@@ -350,7 +348,7 @@
 
               block_data[block.attrs.id] = {'type': 'filter-rows', 'properties': {'filter_column': null, 'operator': null, 'value': null}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
 
-              $.fn.updateBlockText(block.attrs.id);
+              $.fn.blockDataUpdated(block.attrs.id);
             break;
             case 'order':
               var block = $.fn.blockFactory();
@@ -359,7 +357,16 @@
 
               block_data[block.attrs.id] = {'type': 'order', 'properties': {'order_columns': [], 'asc_desc': {}}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
 
-              $.fn.updateBlockText(block.attrs.id);
+              $.fn.blockDataUpdated(block.attrs.id);
+            break;
+            case 'drop-columns':
+              var block = $.fn.blockFactory();
+              blocks[block.attrs.id] = block;
+              stage.add(block);
+
+              block_data[block.attrs.id] = {'type': 'drop-columns', 'properties': {'columns': []}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+
+              $.fn.blockDataUpdated(block.attrs.id);
             break;
           }
         });
@@ -448,7 +455,7 @@
               }
             break;
             case 'order':
-              if ( ('order_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['order_columns'] != null) && ('asc_desc' in block_data[block_id]['properties'] && block_data[block_id]['properties']['asc_desc'] != null) ) {
+              if ( ('order_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['order_columns'].length != 0) && ('asc_desc' in block_data[block_id]['properties'] && Object.keys(block_data[block_id]['properties']['asc_desc']).length != 0) ) {
                 let asc_desc = block_data[block_id]['properties']['asc_desc'];
 
                 let asc_desc_items = [];
@@ -465,6 +472,21 @@
               }
               else {
                 var text = 'order by';
+              }
+            break;
+            case 'drop-columns':
+              if ( ('columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['columns'].length != 0) ) {
+                let columns = block_data[block_id]['properties']['columns'];
+
+                let columns_text = columns.join('\n');
+
+                var text = `
+                Drop Columns:
+                ${columns_text}
+                `;
+              }
+              else {
+                var text = 'drop columns';
               }
           }
 
@@ -1027,20 +1049,21 @@
           }
         }
 
-        $.fn.toggleSelectedBlock = function(block) {
-          if (selected_block_id != block.attrs.id){
+        $.fn.toggleSelectedBlock = function(block_id) {
+          if (selected_block_id != block_id){
             if (selected_block_id != null && selected_block_id in blocks){
               $.fn.setBlockStroke(selected_block_id, 'black');
             }
-            $.fn.setBlockStroke(block.attrs.id, 'yellow');
-            selected_block_id = block.attrs.id;
-            $.fn.displayBlockState(block.attrs.id);
-            $.fn.showBlockProps(block.attrs.id);
+            $.fn.setBlockStroke(block_id, 'yellow');
+            selected_block_id = block_id;
+            $.fn.displayBlockState(block_id);
+            $.fn.showBlockProps(block_id);
           }
           else {
-            $.fn.setBlockStroke(block.attrs.id, 'black');
+            $.fn.setBlockStroke(block_id, 'black');
             selected_block_id = null;
-            $.fn.displayBlockState(block.attrs.id);
+            $.fn.displayBlockState(block_id);
+            $.fn.clearTable();
             $.fn.hideBlockProps();
           }
 
