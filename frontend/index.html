@@ -478,7 +478,7 @@
               if ( ('columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['columns'].length != 0) ) {
                 let columns = block_data[block_id]['properties']['columns'];
 
-                let columns_text = columns.join('\n');
+                let columns_text = columns.join(', ');
 
                 var text = `
                 Drop Columns:
@@ -1038,6 +1038,49 @@
                 $.fn.createAscDescElems();
               }
             break;
+            case 'drop-columns':
+              var parents = $.fn.getBlockParents(block_id);
+              if (parents.length != 1){
+                window.alert('Row filter must have one parent!');
+              } else {
+                var parent_id = parents[0];
+
+                var column_select_options = {};
+                if ( block_data[parent_id]['header'] != null) {
+                  for (const header_item of block_data[parent_id]['header']){
+                    column_select_options[header_item] = header_item;
+                  }
+                }
+
+                // TODO: sort by actual column order
+                var column_select = $.fn.transformPropFactory('multi-select', 'Select Column(s) to Order By: ', '', 'column-select', '', column_select_options);
+
+                document.getElementById('transform-props').appendChild(column_select);
+                document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+                document.getElementById('column-select').value = Object.keys(column_select_options)[0];
+                document.getElementById('column-select-selected').innerHTML = block_data[block_id]['properties']['columns'];
+
+                document.getElementById('column-select-add').addEventListener('click', function(){
+                  var column_select_val = document.getElementById('column-select').value;
+                  if(!block_data[block_id]['properties']['columns'].includes(column_select_val)) {
+                    block_data[block_id]['properties']['columns'].push(column_select_val);
+                    $.fn.blockPropsUpdated(block_id);
+                  }
+                  document.getElementById('column-select-selected').innerHTML = block_data[block_id]['properties']['columns'];
+                });
+
+                document.getElementById('column-select-remove').addEventListener('click', function(){
+                  var column_select_val = document.getElementById('column-select').value;
+                  if (block_data[block_id]['properties']['columns'].includes(column_select_val)){
+                    var index = block_data[block_id]['properties']['columns'].indexOf(column_select_val);
+                    block_data[block_id]['properties']['columns'].splice(index, 1);
+                    $.fn.blockPropsUpdated(block_id);
+                  }
+                  document.getElementById('column-select-selected').innerHTML = block_data[block_id]['properties']['columns'];
+                });
+              }
+
           }
         }
 
@@ -1097,6 +1140,11 @@
               case 'order':
                 if (block_data[block_id]['properties'] == null || (block_data[block_id]['properties']['order_columns'] == null || block_data[block_id]['properties']['order_columns'].length == 0) || (block_data[block_id]['properties']['asc_desc'] == null || Object.keys(block_data[block_id]['properties']['asc_desc']).length == 0)) {
                   block_errors[block_id] = 'You must select row filter properties.';
+                }
+              break;
+              case 'drop-columns':
+                if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['columns'].length == 0) {
+                  block_errors[block_id] = 'You must select drop column properties.';
                 }
               break;
             }

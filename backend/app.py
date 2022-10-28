@@ -135,13 +135,28 @@ def process_block(model_id, block_id, parents, type, properties, data_ref):
 
         try:
             ordered = parent_data.sort_values(by=order_columns, ascending=asc_desc_bools)
-        except:
+        except Exception as e:
             return None, None, str(e)
         else:
             directory = '/'.join(['model_assets', model_id])
             data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
             ordered.to_parquet(data_ref)
             data_dict = prepare_dataframe_for_return(ordered)
+            return data_ref, data_dict, None
+    elif type == 'drop-columns':
+        columns = properties['columns']
+
+        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+
+        try:
+            dropped = parent_data.drop(columns=columns)
+        except Exception as e:
+            return None, None, str(e)
+        else:
+            directory = '/'.join(['model_assets', model_id])
+            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
+            dropped.to_parquet(data_ref)
+            data_dict = prepare_dataframe_for_return(dropped)
             return data_ref, data_dict, None
 
 @app.route('/run-model', methods=['GET'])
