@@ -29,6 +29,7 @@
         <option value="filter-rows">Filter Rows</option>
         <option value="order">Order</option>
         <option value="drop-columns">Drop Columns</option>
+        <option value="group-by">Group By</option>
       </select>
       <select name="data-select" id="data-select">
       </select>
@@ -368,7 +369,16 @@
 
               $.fn.blockDataUpdated(block.attrs.id);
             break;
-          }
+            case 'group-by':
+              var block = $.fn.blockFactory();
+              blocks[block.attrs.id] = block;
+              stage.add(block);
+
+              block_data[block.attrs.id] = {'type': 'group-by', 'properties': {'group_columns': [], 'agg_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+
+              $.fn.blockDataUpdated(block.attrs.id);
+            break;
+        }
         });
 
         $.fn.removeBlock = (block) => {
@@ -488,6 +498,30 @@
               else {
                 var text = 'drop columns';
               }
+            break;
+            case 'group-by':
+              if ( ('group_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['group_columns'].length != 0) && ('agg_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['agg_columns'].length != 0) && ('agg_functions' in block_data[block_id]['properties'] && Object.keys(block_data[block_id]['properties']['agg_functions']).length != 0)) {
+                let group_columns = block_data[block_id]['properties']['group_columns'];
+                let agg_columns = block_data[block_id]['properties']['agg_columns'];
+                let agg_functions = block_data[block_id]['properties']['agg_functions'];
+
+                let agg_items = [];
+                for (const key of Object.keys(agg_functions)) {
+                  agg_items.push(key + ': ' + agg_functions[key]);
+                }
+
+
+                let agg_text = agg_items.join(', ');
+
+                var text = `
+                Group By: ${group_columns}
+                Aggregate On:
+                ${agg_text}
+                `;
+              }
+              else {
+                var text = 'group by';
+              }
           }
 
           for (const child of blocks[block_id].children) {
@@ -527,6 +561,12 @@
 
           $.fn.updateBlockText(block_id);
           $.fn.recolorBlock(block_id);
+
+          // we also want to update all downstream blocks as their data is no longer valid, so we'll do that recursively
+          var block_children = $.fn.getBlockChildren(block_id);
+          for (const block_id of block_children){
+            $.fn.blockPropsUpdated(block_id);
+          }
         }
 
         $.fn.updateBlockData = (block_id, updates) => {
@@ -678,6 +718,18 @@
           return parents;
         }
 
+        $.fn.getBlockChildren = (block_id) => {
+          var children = [];
+          for (const edge of edges) {
+            if (edge['from'] == block_id) {
+              if (!children.includes(edge['to'])) {
+                children.push(edge['to']);
+              }
+            }
+          }
+          return children;
+        }
+
         $.fn.getBlockName = (block_id) => {
           return blocks[block_id].attrs.name;
         }
@@ -739,6 +791,7 @@
               elem.id = id;
               elem.innerHTML = innerHTML;
               span.appendChild(elem);
+            break;
           }
           return span;
         }
@@ -753,6 +806,9 @@
               var parents = $.fn.getBlockParents(block_id);
               if (parents.length != 2){
                 window.alert('Joins must have two parents!')
+              }
+              else if ((block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null) || (block_data[parents[1]]['header'] == null || block_data[parents[1]]['data'] == null)){
+                window.alert('You must run parent blocks before choosing join properties.');
               }
               else {
                 var left_block_select_options = {};
@@ -882,7 +938,11 @@
               var parents = $.fn.getBlockParents(block_id);
               if (parents.length != 1){
                 window.alert('Row filter must have one parent!');
-              } else {
+              }
+              else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+                window.alert('You must run parent block before choosing row filter properties.');
+              }
+              else {
                 var parent_id = parents[0];
 
                 var column_select_options = {};
@@ -954,7 +1014,11 @@
               var parents = $.fn.getBlockParents(block_id);
               if (parents.length != 1){
                 window.alert('Row filter must have one parent!');
-              } else {
+              }
+              else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+                window.alert('You must run parent block before choosing row order properties.');
+              }
+              else {
                 var parent_id = parents[0];
 
                 var column_select_options = {};
@@ -1042,7 +1106,11 @@
               var parents = $.fn.getBlockParents(block_id);
               if (parents.length != 1){
                 window.alert('Row filter must have one parent!');
-              } else {
+              }
+              else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+                window.alert('You must run parent block before choosing drop column properties.');
+              }
+              else {
                 var parent_id = parents[0];
 
                 var column_select_options = {};
@@ -1053,7 +1121,7 @@
                 }
 
                 // TODO: sort by actual column order
-                var column_select = $.fn.transformPropFactory('multi-select', 'Select Column(s) to Order By: ', '', 'column-select', '', column_select_options);
+                var column_select = $.fn.transformPropFactory('multi-select', 'Select Column(s) to Drop: ', '', 'column-select', '', column_select_options);
 
                 document.getElementById('transform-props').appendChild(column_select);
                 document.getElementById('transform-props').appendChild(document.createElement('BR'));
@@ -1080,7 +1148,126 @@
                   document.getElementById('column-select-selected').innerHTML = block_data[block_id]['properties']['columns'];
                 });
               }
+          case 'group-by':
+            var parents = $.fn.getBlockParents(block_id);
+            if (parents.length != 1){
+              window.alert('Row filter must have one parent!');
+            }
+            else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+              window.alert('You must run parent block before choosing group by properties.');
+            }
+            else {
+              var parent_id = parents[0];
 
+              var column_select_options = {};
+              if ( block_data[parent_id]['header'] != null) {
+                for (const header_item of block_data[parent_id]['header']){
+                  column_select_options[header_item] = header_item;
+                }
+              }
+
+              // TODO: sort by actual column order
+              var group_column_select = $.fn.transformPropFactory('multi-select', 'Select Column(s) to Group By: ', '', 'group-select', '', column_select_options);
+
+              document.getElementById('transform-props').appendChild(group_column_select);
+              document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+              document.getElementById('group-select').value = Object.keys(column_select_options)[0];
+              document.getElementById('group-select-selected').innerHTML = block_data[block_id]['properties']['group_columns'];
+
+              document.getElementById('group-select-add').addEventListener('click', function(){
+                var group_select_val = document.getElementById('group-select').value;
+                if(!block_data[block_id]['properties']['group_columns'].includes(group_select_val)) {
+                  block_data[block_id]['properties']['group_columns'].push(group_select_val);
+                  $.fn.blockPropsUpdated(block_id);
+                }
+                document.getElementById('group-select-selected').innerHTML = block_data[block_id]['properties']['group_columns'];
+              });
+
+              document.getElementById('group-select-remove').addEventListener('click', function(){
+                var group_select_val = document.getElementById('group-select').value;
+                if (block_data[block_id]['properties']['group_columns'].includes(group_select_val)){
+                  var index = block_data[block_id]['properties']['group_columns'].indexOf(group_select_val);
+                  block_data[block_id]['properties']['group_columns'].splice(index, 1);
+                  $.fn.blockPropsUpdated(block_id);
+                }
+                document.getElementById('group-select-selected').innerHTML = block_data[block_id]['properties']['group_columns'];
+              });
+
+              var agg_column_select = $.fn.transformPropFactory('multi-select', 'Select Column(s) to Aggregate On: ', '', 'agg-select', '', column_select_options);
+
+              document.getElementById('transform-props').appendChild(agg_column_select);
+              document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+              document.getElementById('agg-select').value = Object.keys(column_select_options)[0];
+              document.getElementById('agg-select-selected').innerHTML = block_data[block_id]['properties']['agg_columns'];
+
+              document.getElementById('agg-select-add').addEventListener('click', function(){
+                var agg_select_val = document.getElementById('group-select').value;
+                if(!block_data[block_id]['properties']['agg_columns'].includes(agg_select_val)) {
+                  block_data[block_id]['properties']['agg_columns'].push(agg_select_val);
+                  $.fn.blockPropsUpdated(block_id);
+                }
+                if(!agg_select_val in block_data[block_id]['properties']['agg_columns']) {
+                  block_data[block_id]['properties']['agg_functions'][column_select_val] = null;
+                  $.fn.blockPropsUpdated(block_id);
+                }
+                document.getElementById('agg-select-selected').innerHTML = block_data[block_id]['properties']['agg_columns'];
+                $.fn.createAggElems();
+              });
+
+              document.getElementById('agg-select-remove').addEventListener('click', function(){
+                var agg_select_val = document.getElementById('agg-select').value;
+                if (block_data[block_id]['properties']['agg_columns'].includes(agg_select_val)){
+                  var index = block_data[block_id]['properties']['agg_columns'].indexOf(agg_select_val);
+                  block_data[block_id]['properties']['agg_columns'].splice(index, 1);
+                  $.fn.blockPropsUpdated(block_id);
+                }
+                if(agg_select_val in block_data[block_id]['properties']['agg_functions']) {
+                  delete block_data[block_id]['properties']['agg_functions'][agg_select_val];
+                  $.fn.blockPropsUpdated(block_id);
+                }
+                document.getElementById('group-select-selected').innerHTML = block_data[block_id]['properties']['group_columns'];
+                $.fn.createAggElems();
+              });
+
+              $.fn.createAggElems = () => {
+                if (!document.getElementById('agg-elems')) {
+                  var agg_elems = document.createElement('div');
+                  agg_elems.id = 'agg-elems';
+                  document.getElementById('transform-props').appendChild(agg_elems);
+                } else {
+                  document.getElementById('agg-elems').replaceChildren();
+                }
+
+                for (const column of block_data[block_id]['properties']['agg_columns']) {
+                  var agg_options = {};
+                  agg_options['count'] = 'count';
+                  agg_options['sum'] = 'sum';
+                  agg_options['mean'] = 'mean';
+                  agg_options['min'] = 'min';
+                  agg_options['max'] = 'max';
+                  var agg = $.fn.transformPropFactory('select', column + ': ', '', 'agg-select-' + column, '', agg_options);
+                  document.getElementById('agg-elems').appendChild(agg);
+                  document.getElementById('agg-elems').appendChild(document.createElement('BR'));
+
+                  if ( column in block_data[block_id]['properties']['agg_functions'] ) {
+                    document.getElementById('agg-select-' + column).value = block_data[block_id]['properties']['agg_functions'][column];
+                  } else{
+                    block_data[block_id]['properties']['agg_functions'][column] = Object.keys(agg_options)[0];
+                    $.fn.blockPropsUpdated(block_id);
+                    document.getElementById('agg-select-' + column).value = block_data[block_id]['properties']['agg_functions'][column];
+                  }
+
+                  document.getElementById('agg-select-' + column).addEventListener('change', function(){
+                    block_data[block_id]['properties']['agg_functions'][column] = this.value;
+                    $.fn.blockPropsUpdated(block_id);
+                  });
+                }
+              }
+
+              $.fn.createAggElems();
+            }
           }
         }
 
@@ -1248,6 +1435,7 @@
           });
         }
 
+        // this grabs the blocks and edges upstream from (and including) the block id selected, and compiles the sub-model in the same way the full model is compiled
         $.fn.getUpstreamModel = (block_id) => {
           var blocks_to_include = {};
           blocks_to_include[block_id] = blocks[block_id];
@@ -1274,10 +1462,34 @@
           return compiled_model;
         }
 
+        // this gets the downstream block ids of the block id passed (not inclusive)
+        $.fn.getDownstreamBlockIds = (block_id) => {
+          var downstream_block_ids = [];
+          var block_ids_to_process = [block_id];
+          var processing;
+          while (block_ids_to_process.length > 0) {
+            processing = block_ids_to_process.pop();
+            for (const edge of edges) {
+              if (edge['from'] == processing) {
+                if(!downstream_block_ids.includes(edge['to'])) {
+                  downstream_block_ids.push(edge['to']);
+                  block_ids_to_process.push(edge['to']);
+                }
+              }
+            }
+          }
+          return downstream_block_ids;
+        }
+
         $( document ).on('click', '#run-to-selected', function() {
-          var model = $.fn.getUpstreamModel(selected_block_id);
-          if ( model != null ) {
-            $.fn.runModel(model);
+          if (selected_block_id == null){
+            window.alert("No block selected!");
+          }
+          else {
+            var model = $.fn.getUpstreamModel(selected_block_id);
+            if ( model != null ) {
+              $.fn.runModel(model);
+            }
           }
         });
   });
