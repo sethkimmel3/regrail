@@ -158,6 +158,23 @@ def process_block(model_id, block_id, parents, type, properties, data_ref):
             dropped.to_parquet(data_ref)
             data_dict = prepare_dataframe_for_return(dropped)
             return data_ref, data_dict, None
+    elif type == 'group-by':
+        columns = properties['group_columns']
+
+        agg_functions = properties['agg_functions']
+
+        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+
+        try:
+            grouped = parent_data.groupby(columns, as_index=False).agg(agg_functions)
+        except Exception as e:
+            return None, None, str(e)
+        else:
+            directory = '/'.join(['model_assets', model_id])
+            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
+            grouped.to_parquet(data_ref)
+            data_dict = prepare_dataframe_for_return(grouped)
+            return data_ref, data_dict, None
 
 @app.route('/run-model', methods=['GET'])
 def run_model():

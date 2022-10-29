@@ -1203,7 +1203,7 @@
               document.getElementById('agg-select-selected').innerHTML = block_data[block_id]['properties']['agg_columns'];
 
               document.getElementById('agg-select-add').addEventListener('click', function(){
-                var agg_select_val = document.getElementById('group-select').value;
+                var agg_select_val = document.getElementById('agg-select').value;
                 if(!block_data[block_id]['properties']['agg_columns'].includes(agg_select_val)) {
                   block_data[block_id]['properties']['agg_columns'].push(agg_select_val);
                   $.fn.blockPropsUpdated(block_id);
@@ -1227,7 +1227,7 @@
                   delete block_data[block_id]['properties']['agg_functions'][agg_select_val];
                   $.fn.blockPropsUpdated(block_id);
                 }
-                document.getElementById('group-select-selected').innerHTML = block_data[block_id]['properties']['group_columns'];
+                document.getElementById('agg-select-selected').innerHTML = block_data[block_id]['properties']['agg_columns'];
                 $.fn.createAggElems();
               });
 
