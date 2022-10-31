@@ -18,6 +18,10 @@
   <body>
   <div>
     <div id="block-select-container" style="position:absolute;top:5px;left:5px;z-index:2">
+      <label for="model-select">Select Model:</label>
+      <select name="model-select" id="model-select"></select>
+      <button id="new-model" type="button">New Model</button>
+      <br>
       <label for="block-select">New Block:</label>
       <select name="block-select" id="block-select">
         <option disabled>Data Sources</option>
@@ -36,7 +40,6 @@
       <button id="add-block" type="button">Add</button>
       <button id="compile-model" type="button">Compile + Run</button>
       <button id="run-to-selected" type="button">Run to Selected</button>
-      <button id="save-model" type="button">Save Model</button>
       <br>
       <span id="selected-block">Selected Block:</span>
     </div>
@@ -221,6 +224,8 @@
         connectors = {};
         edges = []; // convention: {from: block_id, to: block_id, connector: connector_id}
         block_data = {}; // convention: {type: source/join/etc., properties: {}, data-ref: ..directory + file, header: Array(...), data: Array(Array()...Array()), error: null/string}
+
+        $.fn.saveModel();
       }
 
       $.fn.startupSequence = () => {
@@ -286,6 +291,54 @@
           $.fn.toggleSelectedBlock(was_selected);
         }
       }
+
+      $.fn.populateSavedModels = () => {
+        var saved_models = JSON.parse(window.localStorage.getItem('models'));
+        if (saved_models == null) {
+          saved_models = {};
+        }
+        if (!Object.keys(saved_models).includes(model_id)) {
+          const today = new Date();
+          saved_models[model_id] = {'name': model_id, 'created_at': today.toISOString()};
+        }
+        window.localStorage.setItem('models', JSON.stringify(saved_models));
+
+        var model_created_dates = [];
+        for (const item in saved_models) {
+          model_created_dates.push(saved_models[item]['created_at']);
+        }
+        model_created_dates.sort().reverse();
+
+        var model_ids_ordered = [];
+        for (const date of model_created_dates){
+          for (const item in saved_models){
+            if (saved_models[item]['created_at'] == date) {
+              model_ids_ordered.push(item);
+            }
+          }
+        }
+
+        for (const mid of model_ids_ordered) {
+          var model_option = document.createElement('option');
+          model_option.value = mid;
+          model_option.innerHTML = saved_models[mid]['name'];
+          if (mid == model_id) {
+            model_option.setAttribute('selected', true);
+          }
+          document.getElementById('model-select').appendChild(model_option);
+        }
+      }
+
+      $('#model-select').on('change', function() {
+        var url_base = window.location.href.split('?')[0];
+        var direct_to = url_base + '?model=' + this.value;
+        window.location.href = direct_to;
+      })
+
+      $('#new-model').click(function(){
+        var url_base = window.location.href.split('?')[0];
+        window.location.href = url_base;
+      })
 
       $.fn.getBlockChild = (block_id, child_name) => {
         var child_obj = null;
@@ -1508,6 +1561,7 @@
     });
 
     $.fn.startupSequence();
+    $.fn.populateSavedModels();
   });
   </script>
   </body>
