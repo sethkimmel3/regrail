@@ -20,6 +20,7 @@
     <div id="block-select-container" style="position:absolute;top:5px;left:5px;z-index:2">
       <label for="model-select">Select Model:</label>
       <select name="model-select" id="model-select"></select>
+      <button id="rename-model" type="button">Rename Model</button>
       <button id="new-model" type="button">New Model</button>
       <br>
       <label for="block-select">New Block:</label>
@@ -260,8 +261,11 @@
               }
             }
 
+            selected_block_id = null;
+
             for (const block_id of Object.keys(blocks)) {
               $.fn.addBlockEventListeners(block_id);
+              $.fn.recolorBlock(block_id);
             }
           } else {
             $.fn.initializeNewModel();
@@ -274,22 +278,12 @@
 
       // TODO: it's unclear if we've added calls to this function in the right places. We should devise a smarter way of automatically saving the state of the model given certain changes.
       $.fn.saveModel = () => {
-        var was_selected;
-        if (selected_block_id != null) {
-          var was_selected = selected_block_id.slice(0);
-          $.fn.toggleSelectedBlock(selected_block_id);
-        }
-
         var model_array = {
           'stage': stage.toJSON(),
           'edges': edges,
           'block_data': block_data
         }
         window.localStorage.setItem(model_id, JSON.stringify(model_array));
-
-        if (was_selected != null){
-          $.fn.toggleSelectedBlock(was_selected);
-        }
       }
 
       $.fn.populateSavedModels = () => {
@@ -303,6 +297,7 @@
         }
         window.localStorage.setItem('models', JSON.stringify(saved_models));
 
+        // TODO: this can't be efficient
         var model_created_dates = [];
         for (const item in saved_models) {
           model_created_dates.push(saved_models[item]['created_at']);
@@ -321,6 +316,7 @@
         for (const mid of model_ids_ordered) {
           var model_option = document.createElement('option');
           model_option.value = mid;
+          model_option.id = 'model-select-option-' + mid;
           model_option.innerHTML = saved_models[mid]['name'];
           if (mid == model_id) {
             model_option.setAttribute('selected', true);
@@ -333,12 +329,26 @@
         var url_base = window.location.href.split('?')[0];
         var direct_to = url_base + '?model=' + this.value;
         window.location.href = direct_to;
-      })
+      });
+
+      $('#rename-model').on('click', function() {
+
+        var selected_id = document.getElementById('model-select').value;
+        var saved_models = JSON.parse(window.localStorage.getItem('models'));
+        var selected_name = saved_models[selected_id]['name'];
+
+        var new_name = window.prompt("Choose a new model name.", selected_name);
+        if (new_name != null) {
+          saved_models[selected_id]['name'] = new_name;
+          window.localStorage.setItem('models', JSON.stringify(saved_models));
+          document.getElementById('model-select-option-' + selected_id).innerHTML = new_name;
+        }
+      });
 
       $('#new-model').click(function(){
         var url_base = window.location.href.split('?')[0];
         window.location.href = url_base;
-      })
+      });
 
       $.fn.getBlockChild = (block_id, child_name) => {
         var child_obj = null;
@@ -705,6 +715,9 @@
       }
       else if ( block_data[block_id]['error'] == null && block_data[block_id]['header'] == null && block_data[block_id]['data'] == null ) {
         var color = 'lightblue';
+      }
+      if (selected_block_id != block_id) {
+        $.fn.setBlockStroke(block_id, 'black');
       }
 
       $.fn.getBlockChild(block_id, 'box').fill(color);
