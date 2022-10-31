@@ -21,184 +21,212 @@ def list_raw_assets():
         files.extend(full_names)
     return files
 
-def prepare_dataframe_for_return(data):
-    # TODO: truncate if above a certain size
-    return data.fillna('').to_dict('tight')
-
 @app.route('/get-raw-asset', methods=['GET'])
 def get_data_asset():
     asset_name = request.args.get('asset')
     data = pd.read_csv(asset_name, skipinitialspace=True)
     return prepare_dataframe_for_return(data)
 
-# def create_id(type):
-#     return type + '-' + ''.join(random.choice('1234567890abcdefghijklmnopqrstuvwxyz') for i in range(13))
+def create_id(type):
+    return type + '-' + ''.join(random.choice('1234567890abcdefghijklmnopqrstuvwxyz') for i in range(13))
 
 def create_directory_if_not_exists(directory):
     if not path.exists(directory):
         mkdir(directory)
 
-def process_block(model_id, block_id, parents, type, properties, data_ref):
-    if type == 'csv-file':
-        if data_ref.split('/')[0] == 'raw_assets':
-            # we want to re-store the raw data as a model asset
-            raw_data = pd.read_csv(data_ref, skipinitialspace=True)
-            directory = '/'.join(['model_assets', model_id])
-            create_directory_if_not_exists(directory)
-            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
-            raw_data.to_parquet(data_ref)
-            data_dict = prepare_dataframe_for_return(raw_data)
-        elif data_ref.split('/')[0] == 'model_assets':
-            data = pd.read_parquet(data_ref, engine='fastparquet')
-            data_dict = prepare_dataframe_for_return(data)
-        return data_ref, data_dict, None
-    elif type == 'join':
-        left_block = properties['left_block']
-        left_key = properties['left_key']
-        right_block = properties['right_block']
-        right_key = properties['right_key']
-        method = properties['method']
+def read_csv_data(data_ref):
+    return pd.read_csv(data_ref, skipinitialspace=True)
 
-        left_data = pd.read_parquet('/'.join(['model_assets', model_id, left_block + '.snappy.parquet']), engine='fastparquet')
-        right_data = pd.read_parquet('/'.join(['model_assets', model_id, right_block + '.snappy.parquet']), engine='fastparquet')
+def write_to_parquet(data, data_ref):
+    data.to_parquet(data_ref)
 
-        try:
-            merged = left_data.merge(right_data, left_on=left_key, right_on=right_key, how=method)
-        except Exception as e:
-            return None, None, str(e)
-        else:
-            directory = '/'.join(['model_assets', model_id])
-            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
-            merged.to_parquet(data_ref)
-            data_dict = prepare_dataframe_for_return(merged)
-            return data_ref, data_dict, None
-    elif type == 'filter-rows':
-        filter_column = properties['filter_column']
-        operator = properties['operator']
-        value = properties['value']
+def read_parquet(data_ref):
+    return pd.read_parquet(data_ref, engine='fastparquet')
 
-        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+def prepare_dataframe_for_return(data):
+    # TODO: truncate if above a certain size
+    return data.fillna('').to_dict('tight')
 
-        if value[0] == '[' and value[-1] == ']':
-            multi = True
-            values = value[1:-1].split(',')
-            values = [value.strip() for value in values]
-        else:
-            multi = False
+class ReGModel:
+    def __init__(self, model):
+        self.model = model
+        self.model_id = model['model-id']
+        self.blocks = model['blocks']
+        self.edges = model['edges']
+        self.graph = self.build_graph()
+        self.topological_ordering = self.get_topological_ordering()
+        self.run_results = {self.model_id: {}}
 
-        # try to convert value to filter_column type
-        type = parent_data.dtypes[filter_column]
-        try:
-            # TODO: scope this way more extensively
-            if type == 'int64':
-                if multi:
-                    values = [int(value) for value in values]
-                else:
-                    value = int(value)
-        except Exception as e:
-            return None, None, str(e)
+    def print_model(self):
+        print(self.model, flush=True)
 
-        try:
-            if operator == '=':
-                if multi:
-                    filtered = parent_data[parent_data[filter_column].isin(values)]
-                else:
-                    filtered = parent_data[parent_data[filter_column] == value]
-            elif operator == '<':
-                filtered = parent_data[parent_data[filter_column] < value]
-            elif operator == '>':
-                filtered = parent_data[parent_data[filter_column] > value]
-            elif operator == '<=':
-                filtered = parent_data[parent_data[filter_column] <= value]
-            elif operator == '>=':
-                filtered = parent_data[parent_data[filter_column] >= value]
-        except Exception as e:
-            return None, None, str(e)
-        else:
-            directory = '/'.join(['model_assets', model_id])
-            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
-            filtered.to_parquet(data_ref)
-            data_dict = prepare_dataframe_for_return(filtered)
-            return data_ref, data_dict, None
-    elif type == 'order':
-        order_columns = properties['order_columns']
-        asc_desc = properties['asc_desc']
+    def build_graph(self):
+        DG = nx.DiGraph()
+        for connector_id, edge in self.edges.items():
+            DG.add_edge(edge['from'], edge['to'])
+        return DG
 
-        asc_desc_bools = []
-        for column in order_columns:
-            if asc_desc[column] == 'asc':
-                asc_desc_bools.append(True)
-            elif asc_desc[column] == 'desc':
-                asc_desc_bools.append(False)
+    def get_topological_ordering(self):
+        return list(nx.topological_sort(self.graph))
 
-        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+    def process_model(self):
+        for block_id in self.topological_ordering:
+            RGB = ReGBlock(self.model_id, block_id, list(self.graph.predecessors(block_id)), self.blocks[block_id]['type'], self.blocks[block_id]['properties'], self.blocks[block_id]['data-ref'])
+            data_ref, data_dict, error = RGB.process_block()
+            self.run_results[self.model_id][block_id] = {'data-ref': data_ref, 'data': data_dict, 'error': error}
 
-        try:
-            ordered = parent_data.sort_values(by=order_columns, ascending=asc_desc_bools)
-        except Exception as e:
-            return None, None, str(e)
-        else:
-            directory = '/'.join(['model_assets', model_id])
-            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
-            ordered.to_parquet(data_ref)
-            data_dict = prepare_dataframe_for_return(ordered)
-            return data_ref, data_dict, None
-    elif type == 'drop-columns':
-        columns = properties['columns']
+class ReGBlock:
+    def __init__(self, model_id, block_id, parents, type, properties, data_ref):
+        self.model_id = model_id
+        self.block_id = block_id
+        self.parents = parents
+        self.type = type
+        self.properties = properties
+        self.data_ref = data_ref
+        self.directory = '/'.join(['model_assets', model_id])
+        create_directory_if_not_exists(self.directory)
+        self.data_dict = None
 
-        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+    def create_data_ref(self):
+        self.data_ref = '/'.join([self.directory, self.block_id + '.snappy.parquet'])
 
-        try:
-            dropped = parent_data.drop(columns=columns)
-        except Exception as e:
-            return None, None, str(e)
-        else:
-            directory = '/'.join(['model_assets', model_id])
-            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
-            dropped.to_parquet(data_ref)
-            data_dict = prepare_dataframe_for_return(dropped)
-            return data_ref, data_dict, None
-    elif type == 'group-by':
-        columns = properties['group_columns']
+    def process_block(self):
+        if self.type == 'csv-file':
+            if self.data_ref.split('/')[0] == 'raw_assets':
+                raw_data = read_csv_data(self.data_ref)
+                self.create_data_ref()
+                write_to_parquet(raw_data, self.data_ref)
+                self.data_dict = prepare_dataframe_for_return(raw_data)
+            elif self.data_ref.split('/')[0] == 'model_assets':
+                data = read_parquet(self.data_ref)
+                self.data_dict = prepare_dataframe_for_return(data)
+            return self.data_ref, self.data_dict, None
+        elif self.type == 'join':
+            left_block = self.properties['left_block']
+            left_key = self.properties['left_key']
+            right_block = self.properties['right_block']
+            right_key = self.properties['right_key']
+            method = self.properties['method']
 
-        agg_functions = properties['agg_functions']
+            left_data = read_parquet('/'.join(['model_assets', self.model_id, left_block + '.snappy.parquet']))
+            right_data = read_parquet('/'.join(['model_assets', self.model_id, right_block + '.snappy.parquet']))
 
-        parent_data = pd.read_parquet('/'.join(['model_assets', model_id, parents[0] + '.snappy.parquet']), engine='fastparquet')
+            try:
+                merged = left_data.merge(right_data, left_on=left_key, right_on=right_key, how=method)
+            except Exception as e:
+                return None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(merged, self.data_ref)
+                self.data_dict = prepare_dataframe_for_return(merged)
+                return self.data_ref, self.data_dict, None
+        elif self.type == 'filter-rows':
+            filter_column = self.properties['filter_column']
+            operator = self.properties['operator']
+            value = self.properties['value']
 
-        try:
-            grouped = parent_data.groupby(columns, as_index=False).agg(agg_functions)
-        except Exception as e:
-            return None, None, str(e)
-        else:
-            directory = '/'.join(['model_assets', model_id])
-            data_ref = '/'.join([directory, block_id + '.snappy.parquet'])
-            grouped.to_parquet(data_ref)
-            data_dict = prepare_dataframe_for_return(grouped)
-            return data_ref, data_dict, None
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            if value[0] == '[' and value[-1] == ']':
+                multi = True
+                values = value[1:-1].split(',')
+                values = [value.strip() for value in values]
+            else:
+                multi = False
+
+            # try to convert value to filter_column type
+            type = parent_data.dtypes[filter_column]
+            try:
+                # TODO: scope this way more extensively
+                if type == 'int64':
+                    if multi:
+                        values = [int(value) for value in values]
+                    else:
+                        value = int(value)
+            except Exception as e:
+                return None, None, str(e)
+
+            try:
+                if operator == '=':
+                    if multi:
+                        filtered = parent_data[parent_data[filter_column].isin(values)]
+                    else:
+                        filtered = parent_data[parent_data[filter_column] == value]
+                elif operator == '<':
+                    filtered = parent_data[parent_data[filter_column] < value]
+                elif operator == '>':
+                    filtered = parent_data[parent_data[filter_column] > value]
+                elif operator == '<=':
+                    filtered = parent_data[parent_data[filter_column] <= value]
+                elif operator == '>=':
+                    filtered = parent_data[parent_data[filter_column] >= value]
+            except Exception as e:
+                return None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(filtered, self.data_ref)
+                self.data_dict = prepare_dataframe_for_return(filtered)
+                return self.data_ref, self.data_dict, None
+        elif self.type == 'order':
+            order_columns = self.properties['order_columns']
+            asc_desc = self.properties['asc_desc']
+
+            asc_desc_bools = []
+            for column in order_columns:
+                if asc_desc[column] == 'asc':
+                    asc_desc_bools.append(True)
+                elif asc_desc[column] == 'desc':
+                    asc_desc_bools.append(False)
+
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            try:
+                ordered = parent_data.sort_values(by=order_columns, ascending=asc_desc_bools)
+            except Exception as e:
+                return None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(ordered, self.data_ref)
+                self.data_dict = prepare_dataframe_for_return(ordered)
+                return self.data_ref, self.data_dict, None
+        elif self.type == 'drop-columns':
+            columns = self.properties['columns']
+
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            try:
+                dropped = parent_data.drop(columns=columns)
+            except Exception as e:
+                return None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(dropped, self.data_ref)
+                self.data_dict = prepare_dataframe_for_return(dropped)
+                return self.data_ref, self.data_dict, None
+        elif self.type == 'group-by':
+            columns = self.properties['group_columns']
+
+            agg_functions = self.properties['agg_functions']
+
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            try:
+                grouped = parent_data.groupby(columns, as_index=False).agg(agg_functions)
+            except Exception as e:
+                return None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(grouped, self.data_ref)
+                self.data_dict = prepare_dataframe_for_return(grouped)
+                return self.data_ref, self.data_dict, None
 
 @app.route('/run-model', methods=['GET'])
 def run_model():
     model = json.loads(request.args.get('model'))
-    print(model, flush=True)
-    model_id = model['model-id']
-    blocks = model['blocks']
-    edges = model['edges']
-    # we want to do a quick top sort to get the ordering for processing
-    DG = nx.DiGraph()
-    for connector_id, edge in edges.items():
-        DG.add_edge(edge['from'], edge['to'])
-    block_order = list(nx.topological_sort(DG))
-
-    return_array = {}
-    return_array[model_id] = {}
-    for block_id in block_order:
-        return_array[model_id][block_id] = {}
-        data_ref, data_dict, error = process_block(model_id, block_id, list(DG.predecessors(block_id)), blocks[block_id]['type'], blocks[block_id]['properties'], blocks[block_id]['data-ref'])
-        return_array[model_id][block_id]['data-ref'] = data_ref
-        return_array[model_id][block_id]['data'] = data_dict
-        return_array[model_id][block_id]['error'] = error
-
-    return return_array
+    RGM = ReGModel(model)
+    RGM.print_model()
+    RGM.process_model()
+    return RGM.run_results
 
 if __name__ == '__main__':
     app.run(debug = True, host='0.0.0.0', port=3000)
