@@ -9,10 +9,6 @@ import random
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/")
-def hello_world():
-    return "Hello, World!"
-
 @app.route('/list-raw-assets', methods=['GET'])
 def list_raw_assets():
     files = []
@@ -25,7 +21,8 @@ def list_raw_assets():
 def get_data_asset():
     asset_name = request.args.get('asset')
     data = pd.read_csv(asset_name, skipinitialspace=True)
-    return prepare_dataframe_for_return(data)
+    data_dict, summary = prepare_dataframe_for_return(data)
+    return {'data_dict': data_dict, 'summary': summary}
 
 def create_id(type):
     return type + '-' + ''.join(random.choice('1234567890abcdefghijklmnopqrstuvwxyz') for i in range(13))
@@ -37,15 +34,23 @@ def create_directory_if_not_exists(directory):
 def read_csv_data(data_ref):
     return pd.read_csv(data_ref, skipinitialspace=True)
 
-def write_to_parquet(data, data_ref):
-    data.to_parquet(data_ref)
+def write_to_parquet(df, data_ref):
+    df.to_parquet(data_ref)
 
 def read_parquet(data_ref):
     return pd.read_parquet(data_ref, engine='fastparquet')
 
-def prepare_dataframe_for_return(data):
-    # TODO: truncate if above a certain size
-    return data.fillna('').to_dict('tight')
+def prepare_dataframe_for_return(df):
+    # TODO: eventually, we'll want to be able to load much larger datasets, but for now we'll limit it to 1,000
+    if len(df.index) > 1000:
+        data = df.head(1000)
+        truncated = True
+    else:
+        data = df
+        truncated = False
+
+    summary = {'truncated': truncated, 'row_count': len(df.index), 'column_types': str(df.dtypes.to_dict())}
+    return data.fillna('').to_dict('tight'), summary
 
 class ReGModel:
     def __init__(self, model):
@@ -72,8 +77,8 @@ class ReGModel:
     def process_model(self):
         for block_id in self.topological_ordering:
             RGB = ReGBlock(self.model_id, block_id, list(self.graph.predecessors(block_id)), self.blocks[block_id]['type'], self.blocks[block_id]['properties'], self.blocks[block_id]['data-ref'])
-            data_ref, data_dict, error = RGB.process_block()
-            self.run_results[self.model_id][block_id] = {'data-ref': data_ref, 'data': data_dict, 'error': error}
+            data_ref, data_dict, summary, error = RGB.process_block()
+            self.run_results[self.model_id][block_id] = {'data-ref': data_ref, 'data': data_dict, 'error': error, 'summary': summary}
 
 class ReGBlock:
     def __init__(self, model_id, block_id, parents, type, properties, data_ref):
@@ -86,6 +91,7 @@ class ReGBlock:
         self.directory = '/'.join(['model_assets', model_id])
         create_directory_if_not_exists(self.directory)
         self.data_dict = None
+        self.summary = None
 
     def create_data_ref(self):
         self.data_ref = '/'.join([self.directory, self.block_id + '.snappy.parquet'])
@@ -96,11 +102,11 @@ class ReGBlock:
                 raw_data = read_csv_data(self.data_ref)
                 self.create_data_ref()
                 write_to_parquet(raw_data, self.data_ref)
-                self.data_dict = prepare_dataframe_for_return(raw_data)
+                self.data_dict, self.summary = prepare_dataframe_for_return(raw_data)
             elif self.data_ref.split('/')[0] == 'model_assets':
                 data = read_parquet(self.data_ref)
-                self.data_dict = prepare_dataframe_for_return(data)
-            return self.data_ref, self.data_dict, None
+                self.data_dict, self.summary = prepare_dataframe_for_return(data)
+            return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'join':
             left_block = self.properties['left_block']
             left_key = self.properties['left_key']
@@ -114,12 +120,12 @@ class ReGBlock:
             try:
                 merged = left_data.merge(right_data, left_on=left_key, right_on=right_key, how=method)
             except Exception as e:
-                return None, None, str(e)
+                return None, None, None, str(e)
             else:
                 self.create_data_ref()
                 write_to_parquet(merged, self.data_ref)
-                self.data_dict = prepare_dataframe_for_return(merged)
-                return self.data_ref, self.data_dict, None
+                self.data_dict, self.summary = prepare_dataframe_for_return(merged)
+                return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'filter-rows':
             filter_column = self.properties['filter_column']
             operator = self.properties['operator']
@@ -144,7 +150,7 @@ class ReGBlock:
                     else:
                         value = int(value)
             except Exception as e:
-                return None, None, str(e)
+                return None, None, None, str(e)
 
             try:
                 if operator == '=':
@@ -161,12 +167,12 @@ class ReGBlock:
                 elif operator == '>=':
                     filtered = parent_data[parent_data[filter_column] >= value]
             except Exception as e:
-                return None, None, str(e)
+                return None, None, None, str(e)
             else:
                 self.create_data_ref()
                 write_to_parquet(filtered, self.data_ref)
-                self.data_dict = prepare_dataframe_for_return(filtered)
-                return self.data_ref, self.data_dict, None
+                self.data_dict, self.summary = prepare_dataframe_for_return(filtered)
+                return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'order':
             order_columns = self.properties['order_columns']
             asc_desc = self.properties['asc_desc']
@@ -183,12 +189,12 @@ class ReGBlock:
             try:
                 ordered = parent_data.sort_values(by=order_columns, ascending=asc_desc_bools)
             except Exception as e:
-                return None, None, str(e)
+                return None, None, None, str(e)
             else:
                 self.create_data_ref()
                 write_to_parquet(ordered, self.data_ref)
-                self.data_dict = prepare_dataframe_for_return(ordered)
-                return self.data_ref, self.data_dict, None
+                self.data_dict, self.summary = prepare_dataframe_for_return(ordered)
+                return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'drop-columns':
             columns = self.properties['columns']
 
@@ -197,12 +203,12 @@ class ReGBlock:
             try:
                 dropped = parent_data.drop(columns=columns)
             except Exception as e:
-                return None, None, str(e)
+                return None, None, None, str(e)
             else:
                 self.create_data_ref()
                 write_to_parquet(dropped, self.data_ref)
-                self.data_dict = prepare_dataframe_for_return(dropped)
-                return self.data_ref, self.data_dict, None
+                self.data_dict, self.summary = prepare_dataframe_for_return(dropped)
+                return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'group-by':
             columns = self.properties['group_columns']
 
@@ -213,12 +219,12 @@ class ReGBlock:
             try:
                 grouped = parent_data.groupby(columns, as_index=False).agg(agg_functions)
             except Exception as e:
-                return None, None, str(e)
+                return None, None, None, str(e)
             else:
                 self.create_data_ref()
                 write_to_parquet(grouped, self.data_ref)
-                self.data_dict = prepare_dataframe_for_return(grouped)
-                return self.data_ref, self.data_dict, None
+                self.data_dict, self.summary = prepare_dataframe_for_return(grouped)
+                return self.data_ref, self.data_dict, self.summary, None
 
 @app.route('/run-model', methods=['GET'])
 def run_model():

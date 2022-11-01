@@ -46,8 +46,10 @@
     </div>
 
     <div id="flow"></div>
-
-    <table id="data-table" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;top:35px;right:35px;"></table>
+    <div style="max-width:33%;max-height:50%;display:block;margin:auto;position:absolute;top:50px;right:35px;overflow:scroll;">
+      <p id="data-summary"></p>
+      <table id="data-table" style="max-width:100%;max-height:100%;margin:auto;"></table>
+    </div>
     <p id="error-message" style="max-width:33%;max-height:50%;position:absolute;top:0px;right:0px;color:red;"></p>
     <div id="transform-props" style="max-width:33%;max-height:50%;overflow:scroll;display:block;margin:auto;position:absolute;bottom:15px;right:15px;"></div>
   </div>
@@ -529,25 +531,25 @@
         switch (block_type) {
           case 'csv-file':
             var data_source = $('#data-select').val();
-            block_data[block.attrs.id] = {'type': 'csv-file', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'error': null};
+            block_data[block.attrs.id] = {'type': 'csv-file', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'summary': null, 'error': null};
             let name = data_source.split('/')[data_source.split('/').length - 1];
             $.fn.setBlockName(block.attrs.id, name);
             var asset = $.fn.loadRawAsset(block.attrs.id, data_source);
           break;
           case 'join':
-            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
           case 'filter-rows':
-            block_data[block.attrs.id] = {'type': 'filter-rows', 'properties': {'filter_column': null, 'operator': null, 'value': null}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+            block_data[block.attrs.id] = {'type': 'filter-rows', 'properties': {'filter_column': null, 'operator': null, 'value': null}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
           case 'order':
-            block_data[block.attrs.id] = {'type': 'order', 'properties': {'order_columns': [], 'asc_desc': {}}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+            block_data[block.attrs.id] = {'type': 'order', 'properties': {'order_columns': [], 'asc_desc': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
           case 'drop-columns':
-            block_data[block.attrs.id] = {'type': 'drop-columns', 'properties': {'columns': []}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+            block_data[block.attrs.id] = {'type': 'drop-columns', 'properties': {'columns': []}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
           case 'group-by':
-            block_data[block.attrs.id] = {'type': 'group-by', 'properties': {'group_columns': [], 'agg_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'error': null};
+            block_data[block.attrs.id] = {'type': 'group-by', 'properties': {'group_columns': [], 'agg_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
         }
 
@@ -733,6 +735,7 @@
     $.fn.blockPropsUpdated = (block_id) => {
       block_data[block_id]['header'] = null;
       block_data[block_id]['data'] = null;
+      block_data[block_id]['summary'] = null;
       $.fn.clearTable();
 
       $.fn.updateBlockText(block_id);
@@ -789,35 +792,50 @@
       } else {
         document.getElementById('error-message').innerHTML = '';
       }
-      $.fn.populateTable(block_data[block_id]['header'], block_data[block_id]['data']);
+      $.fn.populateTable(block_data[block_id]['header'], block_data[block_id]['data'], block_data[block_id]['summary']);
     }
 
-    $.fn.populateTable = (header, data) => {
-      document.getElementById('data-table').replaceChildren();
-      if (header != null) {
-        var headerRow = document.createElement('tr');
-        for (const item of header){
-          var cell = document.createElement('th');
-          cell.innerHTML = item;
-          headerRow.appendChild(cell);
-        }
-        document.getElementById('data-table').appendChild(headerRow);
-      }
-      if (data != null) {
-        for (const row of data){
-          var tableRow = document.createElement('tr');
-          for (const item of Object.values(row)){
-            var cell = document.createElement('td');
+    $.fn.populateTable = (header, data, summary) => {
+      if (header != null || data != null) {
+        $('#data-table').show();
+        document.getElementById('data-table').replaceChildren();
+        if (header != null) {
+          var headerRow = document.createElement('tr');
+          for (const item of header){
+            var cell = document.createElement('th');
             cell.innerHTML = item;
-            tableRow.append(cell);
+            headerRow.appendChild(cell);
           }
-          document.getElementById('data-table').appendChild(tableRow);
+          document.getElementById('data-table').appendChild(headerRow);
         }
+        if (data != null) {
+          for (const row of data){
+            var tableRow = document.createElement('tr');
+            for (const item of Object.values(row)){
+              var cell = document.createElement('td');
+              cell.innerHTML = item;
+              tableRow.append(cell);
+            }
+            document.getElementById('data-table').appendChild(tableRow);
+          }
+        }
+      }
+
+      if (summary != null) {
+        var summary_text = 'Row Count: ';
+        if (summary['truncated']){
+          summary_text += summary['row_count'] + ' (only displaying 1,000 rows)';
+        } else {
+          summary_text += summary['row_count'];
+        }
+        $('#data-summary').html(summary_text);
       }
     }
 
     $.fn.clearTable = () => {
       document.getElementById('data-table').replaceChildren();
+      $('#data-table').hide();
+      $('#data-summary').html('');
     }
 
     $.fn.hideBlockProps = () => {
@@ -1486,8 +1504,9 @@
 
     $.fn.loadRawAsset = (block_id, asset) => {
       $.get( API_BASE_URL + '/get-raw-asset', {'asset': asset}, function(data) {
-        block_data[block_id]['header'] = data['columns'];
-        block_data[block_id]['data'] = data['data'];
+        block_data[block_id]['header'] = data['data_dict']['columns'];
+        block_data[block_id]['data'] = data['data_dict']['data'];
+        block_data[block_id]['summary'] = data['summary'];
         $.fn.blockDataUpdated(block_id);
       });
     }
@@ -1499,12 +1518,14 @@
             block_data[block_id]['data-ref'] = null;
             block_data[block_id]['header'] = null;
             block_data[block_id]['data'] = null;
+            block_data[block_id]['summary'] = null;
             block_data[block_id]['error'] = data[model_id][block_id]['error'];
           }
           else {
             block_data[block_id]['data-ref'] = data[model_id][block_id]['data-ref'];
             block_data[block_id]['header'] = data[model_id][block_id]['data']['columns'];
             block_data[block_id]['data'] = data[model_id][block_id]['data']['data'];
+            block_data[block_id]['summary'] = data[model_id][block_id]['summary'];
             block_data[block_id]['error'] = null;
           }
           $.fn.blockDataUpdated(block_id);
