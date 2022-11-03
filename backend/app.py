@@ -2,6 +2,8 @@ from flask import Flask, request
 from flask_cors import CORS, cross_origin
 from os import walk, path, mkdir
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import json
 import networkx as nx
 import random
@@ -32,13 +34,16 @@ def create_directory_if_not_exists(directory):
         mkdir(directory)
 
 def read_csv_data(data_ref):
-    return pd.read_csv(data_ref, skipinitialspace=True)
+    return pd.read_csv(data_ref, encoding='utf-8', skipinitialspace=True)
 
 def write_to_parquet(df, data_ref):
-    df.to_parquet(data_ref)
+    print(df.columns, flush=True)
+    # Needed to add this due to some funky issue with multiindex in pivot tables
+    table = pa.Table.from_pandas(df)
+    pq.write_table(table, data_ref)
 
 def read_parquet(data_ref):
-    return pd.read_parquet(data_ref, engine='fastparquet')
+    return pd.read_parquet(data_ref, engine='pyarrow')
 
 def prepare_dataframe_for_return(df):
     # TODO: eventually, we'll want to be able to load much larger datasets, but for now we'll limit it to 1,000
@@ -211,7 +216,6 @@ class ReGBlock:
                 return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'group-by':
             columns = self.properties['group_columns']
-
             agg_functions = self.properties['agg_functions']
 
             parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
@@ -224,6 +228,23 @@ class ReGBlock:
                 self.create_data_ref()
                 write_to_parquet(grouped, self.data_ref)
                 self.data_dict, self.summary = prepare_dataframe_for_return(grouped)
+                return self.data_ref, self.data_dict, self.summary, None
+        elif self.type == 'pivot-table':
+            values_columns = self.properties['values_columns']
+            index_columns = self.properties['index_columns']
+            new_columns = self.properties['new_columns']
+            agg_functions = self.properties['agg_functions']
+
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            try:
+                pivot_table = pd.pivot_table(parent_data, values=values_columns, index=index_columns, columns=new_columns, aggfunc=agg_functions)
+            except Exception as e:
+                return None, None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(pivot_table, self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(pivot_table)
                 return self.data_ref, self.data_dict, self.summary, None
 
 @app.route('/run-model', methods=['GET'])

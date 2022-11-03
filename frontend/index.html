@@ -35,6 +35,7 @@
         <option value="order">Order</option>
         <option value="drop-columns">Drop Columns</option>
         <option value="group-by">Group By</option>
+        <option value="pivot-table">Pivot Table</option>
       </select>
       <select name="data-select" id="data-select">
       </select>
@@ -551,6 +552,9 @@
           case 'group-by':
             block_data[block.attrs.id] = {'type': 'group-by', 'properties': {'group_columns': [], 'agg_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
+          case 'pivot-table':
+            block_data[block.attrs.id] = {'type': 'pivot-table', 'properties': {'values_columns': [], 'index_columns': [], 'new_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+          break;
         }
 
         $.fn.blockDataUpdated(block.attrs.id);
@@ -679,9 +683,11 @@
           }
         break;
         case 'group-by':
-          if ( ('group_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['group_columns'].length != 0) && ('agg_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['agg_columns'].length != 0) && ('agg_functions' in block_data[block_id]['properties'] && Object.keys(block_data[block_id]['properties']['agg_functions']).length != 0)) {
+          if ( block_data[block_id]['properties']['group_columns'].length != 0 && block_data[block_id]['properties']['agg_columns'].length != 0 && Object.keys(block_data[block_id]['properties']['agg_functions']).length != 0) {
             let group_columns = block_data[block_id]['properties']['group_columns'];
+
             let agg_columns = block_data[block_id]['properties']['agg_columns'];
+
             let agg_functions = block_data[block_id]['properties']['agg_functions'];
 
             let agg_items = [];
@@ -689,18 +695,44 @@
               agg_items.push(key + ': ' + agg_functions[key]);
             }
 
-
             let agg_text = agg_items.join(', ');
 
             var text = `
             Group By: ${group_columns}
-            Aggregate On:
             ${agg_text}
             `;
           }
           else {
             var text = 'group by';
           }
+        break;
+        case 'pivot-table':
+          if ( block_data[block_id]['properties']['index_columns'].length != 0 && block_data[block_id]['properties']['new_columns'].length != 0) {
+            let values_columns = block_data[block_id]['properties']['values_columns'];
+            let index_columns = block_data[block_id]['properties']['index_columns'];
+            let new_columns = block_data[block_id]['properties']['new_columns'];
+            let agg_functions = block_data[block_id]['properties']['agg_functions'];
+
+            let agg_items = [];
+            for (const key of Object.keys(agg_functions)) {
+              agg_items.push(key + ': ' + agg_functions[key]);
+            }
+
+            let agg_text = agg_items.join(', ');
+
+            var text = `
+            Pivot Table:
+            Values: ${values_columns}
+            Index: ${index_columns}
+            Columns: ${new_columns}
+            Aggregate On:
+            ${agg_text}
+            `;
+          }
+          else {
+            var text = 'pivot table';
+          }
+        break;
       }
 
       $.fn.getBlockChild(block_id, 'box_text').text(text)
@@ -796,9 +828,9 @@
     }
 
     $.fn.populateTable = (header, data, summary) => {
+      document.getElementById('data-table').replaceChildren();
       if (header != null || data != null) {
         $('#data-table').show();
-        document.getElementById('data-table').replaceChildren();
         if (header != null) {
           var headerRow = document.createElement('tr');
           for (const item of header){
@@ -821,6 +853,7 @@
         }
       }
 
+      $('#data-summary').html('');
       if (summary != null) {
         var summary_text = 'Row Count: ';
         if (summary['truncated']){
@@ -1310,7 +1343,7 @@
                 $.fn.blockPropsUpdated(block_id);
               }
               if(!agg_select_val in block_data[block_id]['properties']['agg_columns']) {
-                block_data[block_id]['properties']['agg_functions'][column_select_val] = null;
+                block_data[block_id]['properties']['agg_functions'][agg_select_val] = null;
                 $.fn.blockPropsUpdated(block_id);
               }
               document.getElementById('agg-select-selected').innerHTML = block_data[block_id]['properties']['agg_columns'];
@@ -1342,6 +1375,156 @@
               }
 
               for (const column of block_data[block_id]['properties']['agg_columns']) {
+                var agg_options = {};
+                agg_options['count'] = 'count';
+                agg_options['sum'] = 'sum';
+                agg_options['mean'] = 'mean';
+                agg_options['min'] = 'min';
+                agg_options['max'] = 'max';
+                var agg = $.fn.transformPropFactory('select', column + ': ', '', 'agg-select-' + column, '', agg_options);
+                document.getElementById('agg-elems').appendChild(agg);
+                document.getElementById('agg-elems').appendChild(document.createElement('BR'));
+
+                if ( column in block_data[block_id]['properties']['agg_functions'] ) {
+                  document.getElementById('agg-select-' + column).value = block_data[block_id]['properties']['agg_functions'][column];
+                } else{
+                  block_data[block_id]['properties']['agg_functions'][column] = Object.keys(agg_options)[0];
+                  $.fn.blockPropsUpdated(block_id);
+                  document.getElementById('agg-select-' + column).value = block_data[block_id]['properties']['agg_functions'][column];
+                }
+
+                document.getElementById('agg-select-' + column).addEventListener('change', function(){
+                  block_data[block_id]['properties']['agg_functions'][column] = this.value;
+                  $.fn.blockPropsUpdated(block_id);
+                });
+              }
+            }
+
+            $.fn.createAggElems();
+          }
+        break;
+        case 'pivot-table':
+          var parents = $.fn.getBlockParents(block_id);
+          if (parents.length != 1){
+            window.alert('Row filter must have one parent!');
+          }
+          else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+            window.alert('You must run parent block before choosing pivot table properties.');
+          }
+          else {
+            var parent_id = parents[0];
+
+            var column_select_options = {};
+            if ( block_data[parent_id]['header'] != null) {
+              for (const header_item of block_data[parent_id]['header']){
+                column_select_options[header_item] = header_item;
+              }
+            }
+
+            // TODO: sort by actual column order
+            var values_column_select = $.fn.transformPropFactory('multi-select', 'Select Value Column(s): ', '', 'values-columns-select', '', column_select_options);
+
+            document.getElementById('transform-props').appendChild(values_column_select);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('values-columns-select').value = Object.keys(column_select_options)[0];
+            document.getElementById('values-columns-select-selected').innerHTML = block_data[block_id]['properties']['values_columns'];
+
+            document.getElementById('values-columns-select-add').addEventListener('click', function(){
+              var values_column_select_val = document.getElementById('values-columns-select').value;
+              if(!block_data[block_id]['properties']['values_columns'].includes(values_column_select_val)) {
+                block_data[block_id]['properties']['values_columns'].push(values_column_select_val);
+                $.fn.blockPropsUpdated(block_id);
+              }
+              if (!values_column_select_val in block_data[block_id]['properties']['agg_functions']) {
+                block_data[block_id]['properties']['agg_functions'][values_column_select_val] = null;
+                $.fn.blockPropsUpdated(block_id);
+              }
+              document.getElementById('values-columns-select-selected').innerHTML = block_data[block_id]['properties']['values_columns'];
+              $.fn.createAggElems();
+            });
+
+            document.getElementById('values-columns-select-remove').addEventListener('click', function(){
+              var values_column_select_val = document.getElementById('values-columns-select').value;
+              if (block_data[block_id]['properties']['values_columns'].includes(values_column_select_val)){
+                var index = block_data[block_id]['properties']['values_columns'].indexOf(values_column_select_val);
+                block_data[block_id]['properties']['values_columns'].splice(index, 1);
+                $.fn.blockPropsUpdated(block_id);
+              }
+              if (values_column_select_val in block_data[block_id]['properties']['agg_functions']) {
+                delete block_data[block_id]['properties']['agg_functions'][values_column_select_val];
+                $.fn.blockPropsUpdated(block_id);
+              }
+              document.getElementById('values-columns-select-selected').innerHTML = block_data[block_id]['properties']['values_columns'];
+              $.fn.createAggElems();
+            });
+
+            // TODO: sort by actual column order
+            var index_column_select = $.fn.transformPropFactory('multi-select', 'Select New Index(es): ', '', 'index-columns-select', '', column_select_options);
+
+            document.getElementById('transform-props').appendChild(index_column_select);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('index-columns-select').value = Object.keys(column_select_options)[0];
+            document.getElementById('index-columns-select-selected').innerHTML = block_data[block_id]['properties']['index_columns'];
+
+            document.getElementById('index-columns-select-add').addEventListener('click', function(){
+              var index_column_select_val = document.getElementById('index-columns-select').value;
+              if(!block_data[block_id]['properties']['index_columns'].includes(index_column_select_val)) {
+                block_data[block_id]['properties']['index_columns'].push(index_column_select_val);
+                $.fn.blockPropsUpdated(block_id);
+              }
+              document.getElementById('index-columns-select-selected').innerHTML = block_data[block_id]['properties']['index_columns'];
+            });
+
+            document.getElementById('index-columns-select-remove').addEventListener('click', function(){
+              var index_column_select_val = document.getElementById('index-columns-select').value;
+              if (block_data[block_id]['properties']['index_columns'].includes(index_column_select_val)){
+                var index = block_data[block_id]['properties']['index_columns'].indexOf(index_column_select_val);
+                block_data[block_id]['properties']['index_columns'].splice(index, 1);
+                $.fn.blockPropsUpdated(block_id);
+              }
+              document.getElementById('index-columns-select-selected').innerHTML = block_data[block_id]['properties']['index_columns'];
+            });
+
+            // TODO: sort by actual column order
+            var new_column_select = $.fn.transformPropFactory('multi-select', 'Select New Column(s): ', '', 'new-columns-select', '', column_select_options);
+
+            document.getElementById('transform-props').appendChild(new_column_select);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('new-columns-select').value = Object.keys(column_select_options)[0];
+            document.getElementById('new-columns-select-selected').innerHTML = block_data[block_id]['properties']['new_columns'];
+
+            document.getElementById('new-columns-select-add').addEventListener('click', function(){
+              var new_column_select_val = document.getElementById('new-columns-select').value;
+              if(!block_data[block_id]['properties']['new_columns'].includes(new_column_select_val)) {
+                block_data[block_id]['properties']['new_columns'].push(new_column_select_val);
+                $.fn.blockPropsUpdated(block_id);
+              }
+              document.getElementById('new-columns-select-selected').innerHTML = block_data[block_id]['properties']['new_columns'];
+            });
+
+            document.getElementById('new-columns-select-remove').addEventListener('click', function(){
+              var new_column_select_val = document.getElementById('new-columns-select').value;
+              if (block_data[block_id]['properties']['new_columns'].includes(new_column_select_val)){
+                var index = block_data[block_id]['properties']['new_columns'].indexOf(new_column_select_val);
+                block_data[block_id]['properties']['new_columns'].splice(index, 1);
+                $.fn.blockPropsUpdated(block_id);
+              }
+              document.getElementById('new-columns-select-selected').innerHTML = block_data[block_id]['properties']['new_columns'];
+            });
+
+            $.fn.createAggElems = () => {
+              if (!document.getElementById('agg-elems')) {
+                var agg_elems = document.createElement('div');
+                agg_elems.id = 'agg-elems';
+                document.getElementById('transform-props').appendChild(agg_elems);
+              } else {
+                document.getElementById('agg-elems').replaceChildren();
+              }
+
+              for (const column of block_data[block_id]['properties']['values_columns']) {
                 var agg_options = {};
                 agg_options['count'] = 'count';
                 agg_options['sum'] = 'sum';
@@ -1430,6 +1613,11 @@
           case 'drop-columns':
             if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['columns'].length == 0) {
               block_errors[block_id] = 'You must select drop column properties.';
+            }
+          break;
+          case 'pivot-table':
+            if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['index_columns'].length == 0 || block_data[block_id]['properties']['new_columns'].length == 0) {
+              block_errors[block_id] = 'You must select pivot table properties.';
             }
           break;
         }
