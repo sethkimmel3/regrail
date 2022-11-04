@@ -2,20 +2,5 @@ version: '3'
 
 services:
   webserver:
-    image: nginx
     volumes:
-     - ./frontend/:/usr/share/nginx/html
-
-  server:
-    build: ./backend
-    restart: unless-stopped
-    ports:
-      - 3000:3000
-    volumes:
-      - ./backend:/app
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
+     - web-root:/usr/share/nginx/html
