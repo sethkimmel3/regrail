@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  webserver:
+    volumes:
+     - ./frontend/:/usr/share/nginx/html
+     - ./nginx-conf:/etc/nginx/conf.d
+     - certbot-etc:/etc/letsencrypt
+     - certbot-var:/var/lib/letsencrpyt
+     - dhparam:/etc/ssl/certs
