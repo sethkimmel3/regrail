@@ -7,6 +7,7 @@ services:
       - ./nginx-conf:/etc/nginx/conf.d
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrpyt
+      - dhparam:/etc/ssl/certs
   certbot:
     image: certbot/certbot
     container_name: certbot
@@ -16,7 +17,7 @@ services:
       - web-root:/var/www/html
     depends_on:
       - webserver
-    command: certonly --webroot --webroot-path=/var/www/html --email seth.kimmel3@gmail.com --agree-tos --no-eff-email --staging -d regrail.io -d www.regrail.io
+    command: certonly --webroot --webroot-path=/var/www/html --email seth.kimmel3@gmail.com --agree-tos --no-eff-email --force-renewal -d regrail.io -d www.regrail.io
 
 volumes:
   certbot-etc:
@@ -26,4 +27,10 @@ volumes:
     driver_opts:
       type: none
       device: /home/seth/regrail/frontend/
+      o: bind
+  dhparam:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/seth/regrail/dhparam/
       o: bind
