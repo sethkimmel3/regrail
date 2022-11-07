@@ -212,18 +212,21 @@ class ReGBlock:
             # convert row selections to integers
             try:
                 row_selections = rows.replace(' ', '').split(',')
-                new_selections = []
+                int_selections = []
                 for row_selection in row_selections:
                     if ':' not in row_selection:
-                        new_selections.append(int(row_selection))
+                        int_selections.append(int(row_selection))
                     else:
                         a,b = row_selection.split(':')
-                        # new_selections.push(int(a):int(b))
+                        # TODO: this could get really innefficent for large ranges. Would be better to use slices, but couldn't seem to combine ints and slices together.
+                        # Running separate iloc operations and concatentating the dataframes is an option, but also potentially even slower. 
+                        for i in range(int(a),int(b) + 1):
+                            int_selections.append(i)
             except Exception as e:
                 return None, None, None, str(e)
 
             try:
-                selected = parent_data.iloc[new_selections]
+                selected = parent_data.iloc[int_selections]
             except Exception as e:
                 return None, None, None, str(e)
             else:
