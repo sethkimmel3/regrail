@@ -28,14 +28,16 @@
         <option disabled>Data Sources</option>
         <option disabled>--------------------</option>
         <option value="csv-file">CSV File</option>
+        <option value="excel-file">Excel File</option>
         <option disabled>Transforms</option>
         <option disabled>--------------------</option>
         <option value="join">Join</option>
         <option value="filter-rows">Filter Rows</option>
+        <option value="select-rows">Select Rows</option>
         <option value="order">Order</option>
         <option value="drop-columns">Drop Columns</option>
         <option value="group-by">Group By</option>
-        <option value="pivot-table">Pivot Table</option>
+        <option value="pivot-table">Pivot Table (Incomplete)</option>
       </select>
       <select name="data-select" id="data-select">
       </select>
@@ -77,7 +79,7 @@
 
       $( document ).on('change', '#block-select', function(){
         var select_value = $('#block-select').val();
-          if (select_value == 'csv-file'){
+          if (select_value == 'csv-file' || select_value == 'excel-file'){
             $('#data-select').show();
           } else {
             $('#data-select').hide();
@@ -521,6 +523,14 @@
             errors = true;
           }
         break;
+        case 'excel-file':
+          var data_source = $('#data-select').val();
+
+          if (data_source == undefined || data_source == ""){
+            window.alert("You must select a data source.");
+            errors = true;
+          }
+        break;
       }
 
       if (!errors) {
@@ -533,15 +543,25 @@
           case 'csv-file':
             var data_source = $('#data-select').val();
             block_data[block.attrs.id] = {'type': 'csv-file', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'summary': null, 'error': null};
-            let name = data_source.split('/')[data_source.split('/').length - 1];
+            var name = data_source.split('/')[data_source.split('/').length - 1];
             $.fn.setBlockName(block.attrs.id, name);
-            var asset = $.fn.loadRawAsset(block.attrs.id, data_source);
+            var asset = $.fn.loadRawAsset(block.attrs.id, data_source, 'csv');
+          break;
+          case 'excel-file':
+            var data_source = $('#data-select').val();
+            block_data[block.attrs.id] = {'type': 'excel-file', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'summary': null, 'error': null};
+            var name = data_source.split('/')[data_source.split('/').length - 1];
+            $.fn.setBlockName(block.attrs.id, name);
+            var asset = $.fn.loadRawAsset(block.attrs.id, data_source, 'excel');
           break;
           case 'join':
             block_data[block.attrs.id] = {'type': 'join', 'properties': {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
           case 'filter-rows':
             block_data[block.attrs.id] = {'type': 'filter-rows', 'properties': {'filter_column': null, 'operator': null, 'value': null}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+          break;
+          case 'select-rows':
+            block_data[block.attrs.id] = {'type': 'select-rows', 'properties': {'rows': []}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
           break;
           case 'order':
             block_data[block.attrs.id] = {'type': 'order', 'properties': {'order_columns': [], 'asc_desc': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
@@ -602,6 +622,9 @@
         case 'csv-file':
           var text = $.fn.getBlockName(block_id);
         break;
+        case 'excel-file':
+          var text = $.fn.getBlockName(block_id);
+        break;
         case 'join':
           if ( ('left_block' in block_data[block_id]['properties'] && block_data[block_id]['properties']['left_block'] != null) && ('right_block' in block_data[block_id]['properties'] && block_data[block_id]['properties']['right_block'] != null)) {
             let left_block = block_data[block_id]['properties']['left_block'];
@@ -645,6 +668,19 @@
           }
           else {
             var text = 'row filter';
+          }
+        break;
+        case 'select-rows':
+          if ( block_data[block_id]['properties']['rows'] != null && block_data[block_id]['properties']['rows'] != '' ) {
+            let rows = block_data[block_id]['properties']['rows'];
+
+            var text = `
+            Row Select:
+            Rows: ${rows}
+            `;
+          }
+          else {
+            var text = 'row select';
           }
         break;
         case 'order':
@@ -833,6 +869,9 @@
         $('#data-table').show();
         if (header != null) {
           var headerRow = document.createElement('tr');
+          var cell = document.createElement('th');
+          cell.innerHTML = 'Row Number';
+          headerRow.appendChild(cell);
           for (const item of header){
             var cell = document.createElement('th');
             cell.innerHTML = item;
@@ -841,8 +880,12 @@
           document.getElementById('data-table').appendChild(headerRow);
         }
         if (data != null) {
-          for (const row of data){
+          for (var i = 0; i < data.length; i++){
+            var row = data[i];
             var tableRow = document.createElement('tr');
+            var cell = document.createElement('td');
+            cell.innerHTML = i;
+            tableRow.append(cell);
             for (const item of Object.values(row)){
               var cell = document.createElement('td');
               cell.innerHTML = item;
@@ -1141,6 +1184,34 @@
             block_data[block_id]['properties']['filter_column'] = document.getElementById('column-select').value;
             block_data[block_id]['properties']['operator'] = document.getElementById('operator-select').value;
             block_data[block_id]['properties']['value'] = document.getElementById('value-select').value;
+          }
+        break;
+        case 'select-rows':
+          var parents = $.fn.getBlockParents(block_id);
+          if (parents.length != 1){
+            window.alert('Row select must have one parent!');
+          }
+          else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+            window.alert('You must run parent block before choosing row order properties.');
+          }
+          else {
+            var parent_id = parents[0];
+
+            var row_input = $.fn.transformPropFactory('text-input', 'Row numbers (separate with commas, use start:end for ranges): ', '', 'row-select', '');
+
+            document.getElementById('transform-props').appendChild(row_input);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('row-select').value = '';
+            if (block_data[block_id]['properties'] != null && block_data[block_id]['properties']['rows'] != null) {
+              document.getElementById('row-select').value = block_data[block_id]['properties']['rows'];
+            }
+
+            document.getElementById('row-select').addEventListener('keyup', function() {
+              block_data[block_id]['properties']['rows'] = this.value;
+              $.fn.blockPropsUpdated(block_id);
+            });
+
           }
         break;
         case 'order':
@@ -1605,6 +1676,11 @@
               block_errors[block_id] = 'You cannot select multiple values unless using = operator.';
             }
           break;
+          case 'select-rows':
+            if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['rows'] == null || block_data[block_id]['properties']['rows'] == '') {
+              block_errors[block_id] = 'You must choose row select properties.';
+            }
+          break;
           case 'order':
             if (block_data[block_id]['properties'] == null || (block_data[block_id]['properties']['order_columns'] == null || block_data[block_id]['properties']['order_columns'].length == 0) || (block_data[block_id]['properties']['asc_desc'] == null || Object.keys(block_data[block_id]['properties']['asc_desc']).length == 0)) {
               block_errors[block_id] = 'You must select row filter properties.';
@@ -1690,8 +1766,8 @@
 
     $.fn.fetchRawAssets();
 
-    $.fn.loadRawAsset = (block_id, asset) => {
-      $.get( API_BASE_URL + '/get-raw-asset', {'asset': asset}, function(data) {
+    $.fn.loadRawAsset = (block_id, asset, type) => {
+      $.get( API_BASE_URL + '/get-raw-asset', {'asset': asset, 'type': type}, function(data) {
         block_data[block_id]['header'] = data['data_dict']['columns'];
         block_data[block_id]['data'] = data['data_dict']['data'];
         block_data[block_id]['summary'] = data['summary'];

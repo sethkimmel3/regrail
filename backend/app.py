@@ -7,6 +7,7 @@ import pyarrow.parquet as pq
 import json
 import networkx as nx
 import random
+import numpy as np
 
 app = Flask(__name__)
 CORS(app)
@@ -22,7 +23,12 @@ def list_raw_assets():
 @app.route('/get-raw-asset', methods=['GET'])
 def get_data_asset():
     asset_name = request.args.get('asset')
-    data = pd.read_csv(asset_name, skipinitialspace=True)
+    asset_type = request.args.get('type')
+    print(asset_type, flush=True)
+    if asset_type == 'csv':
+        data = read_csv_data(asset_name)
+    elif asset_type == 'excel':
+        data = read_excel_data(asset_name)
     data_dict, summary = prepare_dataframe_for_return(data)
     return {'data_dict': data_dict, 'summary': summary}
 
@@ -36,8 +42,17 @@ def create_directory_if_not_exists(directory):
 def read_csv_data(data_ref):
     return pd.read_csv(data_ref, encoding='utf-8', skipinitialspace=True)
 
+def read_excel_data(data_ref):
+    return pd.read_excel(data_ref)
+
 def write_to_parquet(df, data_ref):
-    print(df.columns, flush=True)
+    types = df.dtypes.to_dict()
+    mapping = {}
+    for k,v in types.items():
+        if str(v) == 'object':
+            mapping[k] = 'str'
+    df = df.astype(mapping, copy=True)
+
     # Needed to add this due to some funky issue with multiindex in pivot tables
     table = pa.Table.from_pandas(df)
     pq.write_table(table, data_ref)
@@ -112,6 +127,16 @@ class ReGBlock:
                 data = read_parquet(self.data_ref)
                 self.data_dict, self.summary = prepare_dataframe_for_return(data)
             return self.data_ref, self.data_dict, self.summary, None
+        elif self.type == 'excel-file':
+            if self.data_ref.split('/')[0] == 'raw_assets':
+                raw_data = read_excel_data(self.data_ref)
+                self.create_data_ref()
+                write_to_parquet(raw_data, self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(raw_data)
+            elif self.data_ref.split('/')[0] == 'model_assets':
+                data = read_parquet(self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(data)
+            return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'join':
             left_block = self.properties['left_block']
             left_key = self.properties['left_key']
@@ -177,6 +202,34 @@ class ReGBlock:
                 self.create_data_ref()
                 write_to_parquet(filtered, self.data_ref)
                 self.data_dict, self.summary = prepare_dataframe_for_return(filtered)
+                return self.data_ref, self.data_dict, self.summary, None
+        elif self.type == 'select-rows':
+
+            rows = self.properties['rows']
+
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            # convert row selections to integers
+            try:
+                row_selections = rows.replace(' ', '').split(',')
+                new_selections = []
+                for row_selection in row_selections:
+                    if ':' not in row_selection:
+                        new_selections.append(int(row_selection))
+                    else:
+                        a,b = row_selection.split(':')
+                        # new_selections.push(int(a):int(b))
+            except Exception as e:
+                return None, None, None, str(e)
+
+            try:
+                selected = parent_data.iloc[new_selections]
+            except Exception as e:
+                return None, None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(selected, self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(selected)
                 return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'order':
             order_columns = self.properties['order_columns']
