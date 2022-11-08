@@ -219,7 +219,7 @@ class ReGBlock:
                     else:
                         a,b = row_selection.split(':')
                         # TODO: this could get really innefficent for large ranges. Would be better to use slices, but couldn't seem to combine ints and slices together.
-                        # Running separate iloc operations and concatentating the dataframes is an option, but also potentially even slower. 
+                        # Running separate iloc operations and concatentating the dataframes is an option, but also potentially even slower.
                         for i in range(int(a),int(b) + 1):
                             int_selections.append(i)
             except Exception as e:
@@ -255,6 +255,26 @@ class ReGBlock:
                 self.create_data_ref()
                 write_to_parquet(ordered, self.data_ref)
                 self.data_dict, self.summary = prepare_dataframe_for_return(ordered)
+                return self.data_ref, self.data_dict, self.summary, None
+        elif self.type == 'count-items':
+
+            count_column = self.properties['count_column']
+
+            delimiter = self.properties['delimiter']
+
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            try:
+                # TODO: Maybe do a deepcopy
+                counted = parent_data
+                # TODO: Allow user to add custom column name
+                counted[count_column + ' Count'] = parent_data[count_column].str.split(',').apply(lambda x: len(x))
+            except Exception as e:
+                return None, None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(counted, self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(counted)
                 return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'drop-columns':
             columns = self.properties['columns']

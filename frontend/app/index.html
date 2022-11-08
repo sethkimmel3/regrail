@@ -35,9 +35,12 @@
         <option value="filter-rows">Filter Rows</option>
         <option value="select-rows">Select Rows</option>
         <option value="order">Order</option>
+        <!-- Counts Items in Cells. This is a bit specific, and combines splitting the cell into an array and then counting the items. -->
+        <option value="count-items">Count Items</option>
         <option value="drop-columns">Drop Columns</option>
         <option value="group-by">Group By</option>
-        <option value="pivot-table">Pivot Table (Incomplete)</option>
+        <!-- TODO: Improve Pivot Table -->
+        <option value="pivot-table">Pivot Table</option>
       </select>
       <select name="data-select" id="data-select">
       </select>
@@ -539,41 +542,47 @@
         stage.add(block);
         $.fn.addBlockEventListeners(block.attrs.id);
 
+        block_data[block.attrs.id] = {'type': block_type, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
         switch (block_type) {
           case 'csv-file':
             var data_source = $('#data-select').val();
-            block_data[block.attrs.id] = {'type': 'csv-file', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['data-ref'] = data_source;
+            block_data[block.attrs.id]['properties'] = {};
             var name = data_source.split('/')[data_source.split('/').length - 1];
             $.fn.setBlockName(block.attrs.id, name);
             var asset = $.fn.loadRawAsset(block.attrs.id, data_source, 'csv');
           break;
           case 'excel-file':
             var data_source = $('#data-select').val();
-            block_data[block.attrs.id] = {'type': 'excel-file', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['data-ref'] = data_source;
+            block_data[block.attrs.id]['properties'] = {};
             var name = data_source.split('/')[data_source.split('/').length - 1];
             $.fn.setBlockName(block.attrs.id, name);
             var asset = $.fn.loadRawAsset(block.attrs.id, data_source, 'excel');
           break;
           case 'join':
-            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'};
           break;
           case 'filter-rows':
-            block_data[block.attrs.id] = {'type': 'filter-rows', 'properties': {'filter_column': null, 'operator': null, 'value': null}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'filter_column': null, 'operator': null, 'value': null};
           break;
           case 'select-rows':
-            block_data[block.attrs.id] = {'type': 'select-rows', 'properties': {'rows': []}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'rows': []}
           break;
           case 'order':
-            block_data[block.attrs.id] = {'type': 'order', 'properties': {'order_columns': [], 'asc_desc': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'order_columns': [], 'asc_desc': {}};
+          break;
+          case 'count-items':
+            block_data[block.attrs.id]['properties'] = {'count_column': null, 'delimiter': null};
           break;
           case 'drop-columns':
-            block_data[block.attrs.id] = {'type': 'drop-columns', 'properties': {'columns': []}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'columns': []};
           break;
           case 'group-by':
-            block_data[block.attrs.id] = {'type': 'group-by', 'properties': {'group_columns': [], 'agg_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'group_columns': []};
           break;
           case 'pivot-table':
-            block_data[block.attrs.id] = {'type': 'pivot-table', 'properties': {'values_columns': [], 'index_columns': [], 'new_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'values_columns': [], 'index_columns': [], 'new_columns': [], 'agg_functions': {}};
           break;
         }
 
@@ -701,6 +710,22 @@
           }
           else {
             var text = 'order by';
+          }
+        break;
+        case 'count-items':
+          if ( block_data[block_id]['properties']['count_column'] != null && block_data[block_id]['properties']['delimiter'] != null && block_data[block_id]['properties']['delimiter'] != '' ) {
+            let count_column = block_data[block_id]['properties']['count_column'];
+
+            let delimiter = block_data[block_id]['properties']['delimiter'];
+
+            var text = `
+            Count Items:
+            Column: ${count_column}
+            Delimiter: ${delimiter}
+            `;
+          }
+          else {
+            var text = 'count items';
           }
         break;
         case 'drop-columns':
@@ -1128,6 +1153,7 @@
               }
             }
 
+
             // TODO: sort by actual column order
             var column_select = $.fn.transformPropFactory('select', 'Column: ', '', 'column-select', '', column_select_options);
 
@@ -1304,6 +1330,60 @@
             }
 
             $.fn.createAscDescElems();
+          }
+        break;
+        case 'count-items':
+          var parents = $.fn.getBlockParents(block_id);
+          if (parents.length != 1){
+            window.alert('Row filter must have one parent!');
+          }
+          else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+            window.alert('You must run parent block before choosing drop column properties.');
+          }
+          else {
+            var parent_id = parents[0];
+
+            var column_select_options = {};
+            if ( block_data[parent_id]['header'] != null) {
+              for (const header_item of block_data[parent_id]['header']){
+                column_select_options[header_item] = header_item;
+              }
+            }
+
+            // TODO: sort by actual column order
+            var column_select = $.fn.transformPropFactory('select', 'Column: ', '', 'column-select', '', column_select_options);
+
+            document.getElementById('transform-props').appendChild(column_select);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('column-select').value = Object.keys(column_select_options)[0];
+
+            if ( block_data[block_id]['properties']['count_column'] != null ) {
+              document.getElementById('column-select').value = block_data[block_id]['properties']['count_column'];
+            }
+
+            document.getElementById('column-select').addEventListener('change', function() {
+              block_data[block_id]['properties']['count_column'] = this.value;
+              $.fn.blockPropsUpdated(block_id);
+            })
+
+            var delimiter_input = $.fn.transformPropFactory('text-input', 'Delimiter: ', '', 'delimiter-input', '');
+
+            document.getElementById('transform-props').appendChild(delimiter_input);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('delimiter-input').value = '';
+            if (block_data[block_id]['properties']['delimiter'] != null){
+              document.getElementById('delimiter-input').value = block_data[block_id]['properties']['delimiter'];
+            }
+
+            document.getElementById('delimiter-input').addEventListener('keyup', function() {
+              block_data[block_id]['properties']['delimiter'] = this.value;
+              $.fn.blockPropsUpdated(block_id);
+            });
+
+            block_data[block_id]['properties']['count_column'] = document.getElementById('column-select').value;
+            block_data[block_id]['properties']['delimiter'] = document.getElementById('delimiter-input').value;
           }
         break;
         case 'drop-columns':
@@ -1684,6 +1764,11 @@
           case 'order':
             if (block_data[block_id]['properties'] == null || (block_data[block_id]['properties']['order_columns'] == null || block_data[block_id]['properties']['order_columns'].length == 0) || (block_data[block_id]['properties']['asc_desc'] == null || Object.keys(block_data[block_id]['properties']['asc_desc']).length == 0)) {
               block_errors[block_id] = 'You must select row filter properties.';
+            }
+          break;
+          case 'count-items':
+            if (block_data[block_id]['properties']['delimiter'] == null || block_data[block_id]['properties'] == null || block_data[block_id]['properties']['delimiter'] == null || block_data[block_id]['properties']['delimiter'] == '') {
+              block_errors[block_id] = 'You must select item count properties.';
             }
           break;
           case 'drop-columns':
