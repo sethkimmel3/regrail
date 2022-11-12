@@ -39,6 +39,7 @@
         <option value="count-items">Count Items</option>
         <option value="drop-columns">Drop Columns</option>
         <option value="group-by">Group By</option>
+        <option value="sum-columns">Sum Columns</option>
         <!-- TODO: Improve Pivot Table -->
         <option value="pivot-table">Pivot Table</option>
       </select>
@@ -585,6 +586,8 @@
           case 'group-by':
             block_data[block.attrs.id]['properties'] = {'group_columns': []};
           break;
+          case 'sum-columns':
+            block_data[block.attrs.id]['properties'] = {};
           case 'pivot-table':
             block_data[block.attrs.id]['properties'] = {'values_columns': [], 'index_columns': [], 'new_columns': [], 'agg_functions': {}};
           break;
@@ -770,6 +773,9 @@
           else {
             var text = 'group by';
           }
+        break;
+        case 'sum-columns':
+          var text = 'sum columns';
         break;
         case 'pivot-table':
           if ( block_data[block_id]['properties']['index_columns'].length != 0 && block_data[block_id]['properties']['new_columns'].length != 0) {
@@ -1556,6 +1562,12 @@
             }
 
             $.fn.createAggElems();
+          }
+        break;
+        case 'sum-columns':
+          var parents = $.fn.getBlockParents(block_id);
+          if (parents.length != 1){
+            window.alert('Sum columns must have one parent!');
           }
         break;
         case 'pivot-table':

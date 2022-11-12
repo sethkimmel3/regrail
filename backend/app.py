@@ -272,7 +272,7 @@ class ReGBlock:
                 # TODO: Maybe do a deepcopy
                 counted = parent_data
                 # TODO: Allow user to add custom column name
-                counted[count_column + ' Count'] = parent_data[count_column].str.split(',').apply(lambda x: len(x))
+                counted["Count(" + count_column + ", '" + delimiter + "')"] = parent_data[count_column].str.split(',').apply(lambda x: len(x))
             except Exception as e:
                 return None, None, None, str(e)
             else:
@@ -308,6 +308,26 @@ class ReGBlock:
                 self.create_data_ref()
                 write_to_parquet(grouped, self.data_ref)
                 self.data_dict, self.summary = prepare_dataframe_for_return(grouped)
+                return self.data_ref, self.data_dict, self.summary, None
+        elif self.type == 'sum-columns':
+
+            parent_data = read_parquet('/'.join(['model_assets', self.model_id, self.parents[0] + '.snappy.parquet']))
+
+            try:
+                summed = parent_data.sum()
+                # TODO: it's unclear why there is no pivot function for a series to a dataframe like this. There probably is, but I haven't found it.
+                cols = []
+                vals = []
+                for col, val in summed.items():
+                    cols.append('Sum(' + col + ')')
+                    vals.append(val)
+                df = pd.DataFrame(vals, columns=cols)
+            except Exception as e:
+                return None, None, None, str(e)
+            else:
+                self.create_data_ref()
+                write_to_parquet(df, self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(df)
                 return self.data_ref, self.data_dict, self.summary, None
         elif self.type == 'pivot-table':
             values_columns = self.properties['values_columns']
