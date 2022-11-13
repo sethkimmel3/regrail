@@ -7,6 +7,8 @@
     <script src="scripts/konva.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <!-- Environment Variables -->
+    <script src="../config/config.js"></script>
     <title>ReGrail</title>
     <style>
       table, th, td {
@@ -62,7 +64,8 @@
   </div>
 	<script>
     $( document ).ready(function(){
-      const API_BASE_URL = 'http://0.0.0.0:3000';
+      // const API_BASE_URL = 'https://0.0.0.0:3000';
+      // const API_BASE_URL = 'https://regrail.io/api/';
 
       $.get( API_BASE_URL + '/', function(data) {
         console.log(data);
