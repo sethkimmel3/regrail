@@ -4,3 +4,4 @@ services:
   webserver:
     volumes:
      - ./frontend/:/usr/share/nginx/html
+     - ./config/dev.js:/usr/share/nginx/html/config/config.js
