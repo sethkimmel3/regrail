@@ -1,6 +1,6 @@
 from flask import Flask, request
 from flask_cors import CORS, cross_origin
-from os import walk, path, mkdir
+import os
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -19,7 +19,7 @@ def hello_world():
 @app.route('/list-raw-assets', methods=['GET'])
 def list_raw_assets():
     files = []
-    for (dirpath, dirnames, filenames) in walk('raw_assets'):
+    for (dirpath, dirnames, filenames) in os.walk('raw_assets'):
         full_names = [dirpath + '/' + file for file in filenames]
         files.extend(full_names)
     return files
@@ -40,8 +40,8 @@ def create_id(type):
     return type + '-' + ''.join(random.choice('1234567890abcdefghijklmnopqrstuvwxyz') for i in range(13))
 
 def create_directory_if_not_exists(directory):
-    if not path.exists(directory):
-        mkdir(directory)
+    if not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
 
 def read_csv_data(data_ref):
     return pd.read_csv(data_ref, encoding='utf-8', skipinitialspace=True)
