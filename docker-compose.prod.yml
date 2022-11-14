@@ -8,6 +8,7 @@ services:
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrpyt
       - dhparam:/etc/ssl/certs
+      - ./config/prod.js:/var/www/html/config/config.js
   certbot:
     image: certbot/certbot
     container_name: certbot

@@ -7,6 +7,8 @@
     <script src="scripts/konva.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <!-- Environment Variables -->
+    <script src="../config/config.js"></script>
     <title>ReGrail</title>
     <style>
       table, th, td {
@@ -28,13 +30,19 @@
         <option disabled>Data Sources</option>
         <option disabled>--------------------</option>
         <option value="csv-file">CSV File</option>
+        <option value="excel-file">Excel File</option>
         <option disabled>Transforms</option>
         <option disabled>--------------------</option>
         <option value="join">Join</option>
         <option value="filter-rows">Filter Rows</option>
+        <option value="select-rows">Select Rows</option>
         <option value="order">Order</option>
+        <!-- Counts Items in Cells. This is a bit specific, and combines splitting the cell into an array and then counting the items. -->
+        <option value="count-items">Count Items</option>
         <option value="drop-columns">Drop Columns</option>
         <option value="group-by">Group By</option>
+        <option value="sum-columns">Sum Columns</option>
+        <!-- TODO: Improve Pivot Table -->
         <option value="pivot-table">Pivot Table</option>
       </select>
       <select name="data-select" id="data-select">
@@ -56,7 +64,12 @@
   </div>
 	<script>
     $( document ).ready(function(){
-      const API_BASE_URL = 'http://localhost:3000';
+      // const API_BASE_URL = 'https://0.0.0.0:3000';
+      // const API_BASE_URL = 'https://regrail.io/api/';
+
+      $.get( API_BASE_URL + '/', function(data) {
+        console.log(data);
+      });
 
       var model_id;
       var stage;
@@ -77,7 +90,7 @@
 
       $( document ).on('change', '#block-select', function(){
         var select_value = $('#block-select').val();
-          if (select_value == 'csv-file'){
+          if (select_value == 'csv-file' || select_value == 'excel-file'){
             $('#data-select').show();
           } else {
             $('#data-select').hide();
@@ -521,6 +534,14 @@
             errors = true;
           }
         break;
+        case 'excel-file':
+          var data_source = $('#data-select').val();
+
+          if (data_source == undefined || data_source == ""){
+            window.alert("You must select a data source.");
+            errors = true;
+          }
+        break;
       }
 
       if (!errors) {
@@ -529,31 +550,49 @@
         stage.add(block);
         $.fn.addBlockEventListeners(block.attrs.id);
 
+        block_data[block.attrs.id] = {'type': block_type, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
         switch (block_type) {
           case 'csv-file':
             var data_source = $('#data-select').val();
-            block_data[block.attrs.id] = {'type': 'csv-file', 'properties': {}, 'data-ref': data_source, 'header': null, 'data': null, 'summary': null, 'error': null};
-            let name = data_source.split('/')[data_source.split('/').length - 1];
+            block_data[block.attrs.id]['data-ref'] = data_source;
+            block_data[block.attrs.id]['properties'] = {};
+            var name = data_source.split('/')[data_source.split('/').length - 1];
             $.fn.setBlockName(block.attrs.id, name);
-            var asset = $.fn.loadRawAsset(block.attrs.id, data_source);
+            var asset = $.fn.loadRawAsset(block.attrs.id, data_source, 'csv');
+          break;
+          case 'excel-file':
+            var data_source = $('#data-select').val();
+            block_data[block.attrs.id]['data-ref'] = data_source;
+            block_data[block.attrs.id]['properties'] = {};
+            var name = data_source.split('/')[data_source.split('/').length - 1];
+            $.fn.setBlockName(block.attrs.id, name);
+            var asset = $.fn.loadRawAsset(block.attrs.id, data_source, 'excel');
           break;
           case 'join':
-            block_data[block.attrs.id] = {'type': 'join', 'properties': {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'};
           break;
           case 'filter-rows':
-            block_data[block.attrs.id] = {'type': 'filter-rows', 'properties': {'filter_column': null, 'operator': null, 'value': null}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'filter_column': null, 'operator': null, 'value': null};
+          break;
+          case 'select-rows':
+            block_data[block.attrs.id]['properties'] = {'rows': []}
           break;
           case 'order':
-            block_data[block.attrs.id] = {'type': 'order', 'properties': {'order_columns': [], 'asc_desc': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'order_columns': [], 'asc_desc': {}};
+          break;
+          case 'count-items':
+            block_data[block.attrs.id]['properties'] = {'count_column': null, 'delimiter': null};
           break;
           case 'drop-columns':
-            block_data[block.attrs.id] = {'type': 'drop-columns', 'properties': {'columns': []}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'columns': []};
           break;
           case 'group-by':
-            block_data[block.attrs.id] = {'type': 'group-by', 'properties': {'group_columns': [], 'agg_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'group_columns': []};
           break;
+          case 'sum-columns':
+            block_data[block.attrs.id]['properties'] = {};
           case 'pivot-table':
-            block_data[block.attrs.id] = {'type': 'pivot-table', 'properties': {'values_columns': [], 'index_columns': [], 'new_columns': [], 'agg_functions': {}}, 'data-ref': null, 'header': null, 'data': null, 'summary': null, 'error': null};
+            block_data[block.attrs.id]['properties'] = {'values_columns': [], 'index_columns': [], 'new_columns': [], 'agg_functions': {}};
           break;
         }
 
@@ -602,6 +641,9 @@
         case 'csv-file':
           var text = $.fn.getBlockName(block_id);
         break;
+        case 'excel-file':
+          var text = $.fn.getBlockName(block_id);
+        break;
         case 'join':
           if ( ('left_block' in block_data[block_id]['properties'] && block_data[block_id]['properties']['left_block'] != null) && ('right_block' in block_data[block_id]['properties'] && block_data[block_id]['properties']['right_block'] != null)) {
             let left_block = block_data[block_id]['properties']['left_block'];
@@ -647,6 +689,19 @@
             var text = 'row filter';
           }
         break;
+        case 'select-rows':
+          if ( block_data[block_id]['properties']['rows'] != null && block_data[block_id]['properties']['rows'] != '' ) {
+            let rows = block_data[block_id]['properties']['rows'];
+
+            var text = `
+            Row Select:
+            Rows: ${rows}
+            `;
+          }
+          else {
+            var text = 'row select';
+          }
+        break;
         case 'order':
           if ( ('order_columns' in block_data[block_id]['properties'] && block_data[block_id]['properties']['order_columns'].length != 0) && ('asc_desc' in block_data[block_id]['properties'] && Object.keys(block_data[block_id]['properties']['asc_desc']).length != 0) ) {
             let asc_desc = block_data[block_id]['properties']['asc_desc'];
@@ -665,6 +720,22 @@
           }
           else {
             var text = 'order by';
+          }
+        break;
+        case 'count-items':
+          if ( block_data[block_id]['properties']['count_column'] != null && block_data[block_id]['properties']['delimiter'] != null && block_data[block_id]['properties']['delimiter'] != '' ) {
+            let count_column = block_data[block_id]['properties']['count_column'];
+
+            let delimiter = block_data[block_id]['properties']['delimiter'];
+
+            var text = `
+            Count Items:
+            Column: ${count_column}
+            Delimiter: ${delimiter}
+            `;
+          }
+          else {
+            var text = 'count items';
           }
         break;
         case 'drop-columns':
@@ -705,6 +776,9 @@
           else {
             var text = 'group by';
           }
+        break;
+        case 'sum-columns':
+          var text = 'sum columns';
         break;
         case 'pivot-table':
           if ( block_data[block_id]['properties']['index_columns'].length != 0 && block_data[block_id]['properties']['new_columns'].length != 0) {
@@ -833,6 +907,9 @@
         $('#data-table').show();
         if (header != null) {
           var headerRow = document.createElement('tr');
+          var cell = document.createElement('th');
+          cell.innerHTML = 'Row Number';
+          headerRow.appendChild(cell);
           for (const item of header){
             var cell = document.createElement('th');
             cell.innerHTML = item;
@@ -841,8 +918,12 @@
           document.getElementById('data-table').appendChild(headerRow);
         }
         if (data != null) {
-          for (const row of data){
+          for (var i = 0; i < data.length; i++){
+            var row = data[i];
             var tableRow = document.createElement('tr');
+            var cell = document.createElement('td');
+            cell.innerHTML = i;
+            tableRow.append(cell);
             for (const item of Object.values(row)){
               var cell = document.createElement('td');
               cell.innerHTML = item;
@@ -1085,6 +1166,7 @@
               }
             }
 
+
             // TODO: sort by actual column order
             var column_select = $.fn.transformPropFactory('select', 'Column: ', '', 'column-select', '', column_select_options);
 
@@ -1141,6 +1223,34 @@
             block_data[block_id]['properties']['filter_column'] = document.getElementById('column-select').value;
             block_data[block_id]['properties']['operator'] = document.getElementById('operator-select').value;
             block_data[block_id]['properties']['value'] = document.getElementById('value-select').value;
+          }
+        break;
+        case 'select-rows':
+          var parents = $.fn.getBlockParents(block_id);
+          if (parents.length != 1){
+            window.alert('Row select must have one parent!');
+          }
+          else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+            window.alert('You must run parent block before choosing row order properties.');
+          }
+          else {
+            var parent_id = parents[0];
+
+            var row_input = $.fn.transformPropFactory('text-input', 'Row numbers (separate with commas, use start:end for ranges): ', '', 'row-select', '');
+
+            document.getElementById('transform-props').appendChild(row_input);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('row-select').value = '';
+            if (block_data[block_id]['properties'] != null && block_data[block_id]['properties']['rows'] != null) {
+              document.getElementById('row-select').value = block_data[block_id]['properties']['rows'];
+            }
+
+            document.getElementById('row-select').addEventListener('keyup', function() {
+              block_data[block_id]['properties']['rows'] = this.value;
+              $.fn.blockPropsUpdated(block_id);
+            });
+
           }
         break;
         case 'order':
@@ -1233,6 +1343,60 @@
             }
 
             $.fn.createAscDescElems();
+          }
+        break;
+        case 'count-items':
+          var parents = $.fn.getBlockParents(block_id);
+          if (parents.length != 1){
+            window.alert('Row filter must have one parent!');
+          }
+          else if (block_data[parents[0]]['header'] == null || block_data[parents[0]]['data'] == null){
+            window.alert('You must run parent block before choosing drop column properties.');
+          }
+          else {
+            var parent_id = parents[0];
+
+            var column_select_options = {};
+            if ( block_data[parent_id]['header'] != null) {
+              for (const header_item of block_data[parent_id]['header']){
+                column_select_options[header_item] = header_item;
+              }
+            }
+
+            // TODO: sort by actual column order
+            var column_select = $.fn.transformPropFactory('select', 'Column: ', '', 'column-select', '', column_select_options);
+
+            document.getElementById('transform-props').appendChild(column_select);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('column-select').value = Object.keys(column_select_options)[0];
+
+            if ( block_data[block_id]['properties']['count_column'] != null ) {
+              document.getElementById('column-select').value = block_data[block_id]['properties']['count_column'];
+            }
+
+            document.getElementById('column-select').addEventListener('change', function() {
+              block_data[block_id]['properties']['count_column'] = this.value;
+              $.fn.blockPropsUpdated(block_id);
+            })
+
+            var delimiter_input = $.fn.transformPropFactory('text-input', 'Delimiter: ', '', 'delimiter-input', '');
+
+            document.getElementById('transform-props').appendChild(delimiter_input);
+            document.getElementById('transform-props').appendChild(document.createElement('BR'));
+
+            document.getElementById('delimiter-input').value = '';
+            if (block_data[block_id]['properties']['delimiter'] != null){
+              document.getElementById('delimiter-input').value = block_data[block_id]['properties']['delimiter'];
+            }
+
+            document.getElementById('delimiter-input').addEventListener('keyup', function() {
+              block_data[block_id]['properties']['delimiter'] = this.value;
+              $.fn.blockPropsUpdated(block_id);
+            });
+
+            block_data[block_id]['properties']['count_column'] = document.getElementById('column-select').value;
+            block_data[block_id]['properties']['delimiter'] = document.getElementById('delimiter-input').value;
           }
         break;
         case 'drop-columns':
@@ -1401,6 +1565,12 @@
             }
 
             $.fn.createAggElems();
+          }
+        break;
+        case 'sum-columns':
+          var parents = $.fn.getBlockParents(block_id);
+          if (parents.length != 1){
+            window.alert('Sum columns must have one parent!');
           }
         break;
         case 'pivot-table':
@@ -1605,9 +1775,19 @@
               block_errors[block_id] = 'You cannot select multiple values unless using = operator.';
             }
           break;
+          case 'select-rows':
+            if (block_data[block_id]['properties'] == null || block_data[block_id]['properties']['rows'] == null || block_data[block_id]['properties']['rows'] == '') {
+              block_errors[block_id] = 'You must choose row select properties.';
+            }
+          break;
           case 'order':
             if (block_data[block_id]['properties'] == null || (block_data[block_id]['properties']['order_columns'] == null || block_data[block_id]['properties']['order_columns'].length == 0) || (block_data[block_id]['properties']['asc_desc'] == null || Object.keys(block_data[block_id]['properties']['asc_desc']).length == 0)) {
               block_errors[block_id] = 'You must select row filter properties.';
+            }
+          break;
+          case 'count-items':
+            if (block_data[block_id]['properties']['delimiter'] == null || block_data[block_id]['properties'] == null || block_data[block_id]['properties']['delimiter'] == null || block_data[block_id]['properties']['delimiter'] == '') {
+              block_errors[block_id] = 'You must select item count properties.';
             }
           break;
           case 'drop-columns':
@@ -1690,8 +1870,8 @@
 
     $.fn.fetchRawAssets();
 
-    $.fn.loadRawAsset = (block_id, asset) => {
-      $.get( API_BASE_URL + '/get-raw-asset', {'asset': asset}, function(data) {
+    $.fn.loadRawAsset = (block_id, asset, type) => {
+      $.get( API_BASE_URL + '/get-raw-asset', {'asset': asset, 'type': type}, function(data) {
         block_data[block_id]['header'] = data['data_dict']['columns'];
         block_data[block_id]['data'] = data['data_dict']['data'];
         block_data[block_id]['summary'] = data['summary'];
