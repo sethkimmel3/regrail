@@ -25,16 +25,30 @@ def list_raw_assets():
     return files
 
 @app.route('/get-raw-asset', methods=['GET'])
-def get_data_asset():
+def get_raw_asset():
     asset_name = request.args.get('asset')
+    print(asset_name, flush=True)
     asset_type = request.args.get('type')
-    print(asset_type, flush=True)
+
     if asset_type == 'csv':
         data = read_csv_data(asset_name)
     elif asset_type == 'excel':
         data = read_excel_data(asset_name)
     data_dict, summary = prepare_dataframe_for_return(data)
     return {'data_dict': data_dict, 'summary': summary}
+
+@app.route('/save-user-file', methods=['POST'])
+def save_user_file():
+    user_id = request.form['user_id']
+    file = request.files.get('file_input')
+
+    directory = os.path.join('raw_assets/user_assets/', user_id)
+    create_directory_if_not_exists(directory)
+
+    path = os.path.join(directory, file.filename)
+    file.save(path)
+
+    return path
 
 def create_id(type):
     return type + '-' + ''.join(random.choice('1234567890abcdefghijklmnopqrstuvwxyz') for i in range(13))
@@ -75,6 +89,7 @@ def prepare_dataframe_for_return(df):
 
     summary = {'truncated': truncated, 'row_count': len(df.index), 'column_types': str(df.dtypes.to_dict())}
     return data.fillna('').to_dict('tight'), summary
+
 
 class ReGModel:
     def __init__(self, model):

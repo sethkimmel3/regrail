@@ -2,6 +2,7 @@ $( document ).ready(function(){
 
   // user vars
   var model_id;
+  var user_id;
 
   var assets = []; // convention: {path: path/to/file, name: example.csv, scope: user/sample, type:.csv/.xlsx/other}
 
@@ -196,6 +197,13 @@ $( document ).ready(function(){
   }
 
   $.fn.startupSequence = () => {
+    if(window.localStorage.getItem('user_id') != null){
+      user_id = window.localStorage.getItem('user_id');
+    } else {
+      user_id = "user-" + Math.random().toString(16).slice(2);
+      window.localStorage.setItem('user_id', user_id);
+    }
+
     const url_part = window.location.href.split('?')[1];
     const url_params = new URLSearchParams(url_part);
     if (url_params.has('model')) {
@@ -492,7 +500,19 @@ $( document ).ready(function(){
           errors = true;
         }
       break;
-    }
+      case 'upload-file':
+        var file_input = document.getElementById('file-input').files[0];
+
+        if (file_input == undefined || file_input == ""){
+          window.alert("You must select a csv or excel file!");
+          errors = true;
+        }
+        else if (file_input.size > 25000000){
+          window.alert("You can't upload a file greater than 25Mb yet. Don't worry, we'll get there!");
+          errors = true;
+        }
+      break;
+      }
 
     if (!errors) {
       var block = $.fn.blockFactory();
@@ -517,6 +537,19 @@ $( document ).ready(function(){
           var name = data_source.split('/')[data_source.split('/').length - 1];
           $.fn.setBlockName(block.attrs.id, name);
           var asset = $.fn.loadRawAsset(block.attrs.id, data_source, 'excel');
+        break;
+        case 'upload-file':
+          var file_input = document.getElementById('file-input').files[0];
+          var data_ref = $.fn.saveUserAsset(user_id, file_input);
+
+          block_data[block.attrs.id]['data-ref'] = data_ref;
+          block_data[block.attrs.id]['properties'] = {};
+
+          var name = file_input.name.split('/')[file_input.name.split('/').length - 1];
+          $.fn.setBlockName(block.attrs.id, name);
+
+          var file_type = name.split('.')[name.split('.').length - 1] == 'csv' ? 'csv' : 'excel';
+          var asset = $.fn.loadRawAsset(block.attrs.id, data_ref, file_type);
         break;
         case 'join':
           block_data[block.attrs.id]['properties'] = {'left_block': null, 'right_block': null, 'left_key': null, 'right_key': null, 'type': 'left'};
@@ -592,6 +625,9 @@ $( document ).ready(function(){
         var text = $.fn.getBlockName(block_id);
       break;
       case 'excel-file':
+        var text = $.fn.getBlockName(block_id);
+      break;
+      case 'upload-file':
         var text = $.fn.getBlockName(block_id);
       break;
       case 'join':
@@ -1841,6 +1877,32 @@ $( document ).ready(function(){
       block_data[block_id]['summary'] = data['summary'];
       $.fn.blockDataUpdated(block_id);
     });
+  }
+
+  $.fn.saveUserAsset = (user_id, file_input) => {
+    var formData = new FormData()
+
+    formData.append('user_id', user_id)
+    formData.append('file_input', file_input);
+
+    var data_ref = '';
+
+    $.ajax({
+      url: API_BASE_URL + '/save-user-file',
+      type: 'POST',
+      data: formData,
+      processData: false,
+      contentType: false,
+      async: false,
+      success: function(data){
+        data_ref = data;
+      },
+      error: function(err) {
+        console.log("Error uploading file: " + err)
+      }
+    });
+
+    return data_ref;
   }
 
   $.fn.runModel = (model) => {
