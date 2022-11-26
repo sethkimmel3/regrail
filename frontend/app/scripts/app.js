@@ -23,6 +23,8 @@ $( document ).ready(function(){
   var width = window.innerWidth;
   var height = window.innerHeight;
 
+  const MAX_FILE_UPLOAD_SIZE = 25000000;
+
   $.fn.displayAssetSelectors = () => {
     var select_value = $('#block-select').val();
       if (select_value == 'csv-file') {
@@ -41,6 +43,7 @@ $( document ).ready(function(){
       }
       else {
         $('#data-select').hide();
+        $('#file-input').hide();
       }
   }
 
@@ -507,8 +510,8 @@ $( document ).ready(function(){
           window.alert("You must select a csv or excel file!");
           errors = true;
         }
-        else if (file_input.size > 25000000){
-          window.alert("You can't upload a file greater than 25Mb yet. Don't worry, we'll get there!");
+        else if (file_input.size > MAX_FILE_UPLOAD_SIZE){
+          window.alert("You can't upload a file greater than 25MB yet. Don't worry, we'll get there!");
           errors = true;
         }
       break;
@@ -541,14 +544,12 @@ $( document ).ready(function(){
         case 'upload-file':
           var file_input = document.getElementById('file-input').files[0];
           var data_ref = $.fn.saveUserAsset(user_id, file_input);
-
           block_data[block.attrs.id]['data-ref'] = data_ref;
-          block_data[block.attrs.id]['properties'] = {};
-
           var name = file_input.name.split('/')[file_input.name.split('/').length - 1];
           $.fn.setBlockName(block.attrs.id, name);
 
           var file_type = name.split('.')[name.split('.').length - 1] == 'csv' ? 'csv' : 'excel';
+          block_data[block.attrs.id]['properties'] = {'file_type': file_type};
           var asset = $.fn.loadRawAsset(block.attrs.id, data_ref, file_type);
         break;
         case 'join':
@@ -1845,8 +1846,38 @@ $( document ).ready(function(){
 
   $.fn.displayRawAssets = (type) => {
     document.getElementById('data-select').replaceChildren();
+
+    var user_file_label = document.createElement('option');
+    user_file_label.disabled = true;
+    user_file_label.innerHTML = 'User Files'
+    document.getElementById('data-select').append(user_file_label);
+
+    var user_label_sep = document.createElement('option');
+    user_label_sep.disabled = true;
+    user_label_sep.innerHTML = '--------------------';
+    document.getElementById('data-select').append(user_label_sep);
+
     for (var i = 0; i < assets.length; i++){
-      if (assets[i].type == type) {
+      if (assets[i].type == type && assets[i].scope == 'user') {
+        var data_option = document.createElement('option');
+        data_option.value = assets[i].path;
+        data_option.innerHTML = assets[i].name;
+        document.getElementById('data-select').append(data_option);
+      }
+    }
+
+    var sample_file_label = document.createElement('option');
+    sample_file_label.disabled = true;
+    sample_file_label.innerHTML = 'Sample Files'
+    document.getElementById('data-select').append(sample_file_label);
+
+    var sample_label_sep = document.createElement('option');
+    sample_label_sep.disabled = true;
+    sample_label_sep.innerHTML = '--------------------';
+    document.getElementById('data-select').append(sample_label_sep);
+
+    for (var i = 0; i < assets.length; i++){
+      if (assets[i].type == type && assets[i].scope == 'sample') {
         var data_option = document.createElement('option');
         data_option.value = assets[i].path;
         data_option.innerHTML = assets[i].name;
@@ -1860,7 +1891,7 @@ $( document ).ready(function(){
         for (var i = 0; i < data.length; i++){
           var path = data[i];
           var name = data[i].split('/')[data[i].split('/').length - 1];
-          var scope = data[i].split('/')[data[i].split('/').length - 2] == 'sample_data' ? 'sample' : 'user';
+          var scope = data[i].split('/')[data[i].split('/').length - 2] == 'sample_assets' ? 'sample' : 'user';
           var type = data[i].split('.')[data[i].split('.').length - 1];
           if ( name != '.DS_Store' ) {
             assets.push({'path': path, 'name': name, 'scope': scope, 'type': type});

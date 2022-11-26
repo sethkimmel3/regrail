@@ -8,6 +8,7 @@ import json
 import networkx as nx
 import random
 import numpy as np
+import csv
 
 app = Flask(__name__)
 CORS(app)
@@ -58,7 +59,15 @@ def create_directory_if_not_exists(directory):
         os.makedirs(directory, exist_ok=True)
 
 def read_csv_data(data_ref):
-    return pd.read_csv(data_ref, encoding='utf-8', skipinitialspace=True)
+    try:
+        return pd.read_csv(data_ref, encoding='utf-8', quoting=csv.QUOTE_MINIMAL, skipinitialspace=True)
+    except Exception as e:
+        if 'Error tokenizing data. C error: EOF inside string starting at row' in str(e):
+            try:
+                # TODO: This is to correct a strange quoting error in csv files. We may want to manually strip out the extra quotes that are returned.
+                return pd.read_csv(data_ref, encoding='utf-8', quoting=csv.QUOTE_NONE, skipinitialspace=True)
+            except Exception as e:
+                raise(e)
 
 def read_excel_data(data_ref):
     return pd.read_excel(data_ref)
@@ -89,7 +98,6 @@ def prepare_dataframe_for_return(df):
 
     summary = {'truncated': truncated, 'row_count': len(df.index), 'column_types': str(df.dtypes.to_dict())}
     return data.fillna('').to_dict('tight'), summary
-
 
 class ReGModel:
     def __init__(self, model):
@@ -149,6 +157,20 @@ class ReGBlock:
         elif self.type == 'excel-file':
             if self.data_ref.split('/')[0] == 'raw_assets':
                 raw_data = read_excel_data(self.data_ref)
+                self.create_data_ref()
+                write_to_parquet(raw_data, self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(raw_data)
+            elif self.data_ref.split('/')[0] == 'model_assets':
+                data = read_parquet(self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(data)
+            return self.data_ref, self.data_dict, self.summary, None
+        elif self.type == 'upload-file':
+            if self.data_ref.split('/')[0] == 'raw_assets':
+                file_type = self.properties['file_type']
+                if file_type == 'csv':
+                    raw_data = read_csv_data(self.data_ref)
+                elif file_type == 'excel':
+                    raw_data = read_excel_data(self.data_ref)
                 self.create_data_ref()
                 write_to_parquet(raw_data, self.data_ref)
                 self.data_dict, self.summary = prepare_dataframe_for_return(raw_data)
