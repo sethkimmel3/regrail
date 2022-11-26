@@ -8,6 +8,7 @@ import json
 import networkx as nx
 import random
 import numpy as np
+import csv
 
 app = Flask(__name__)
 CORS(app)
@@ -25,16 +26,30 @@ def list_raw_assets():
     return files
 
 @app.route('/get-raw-asset', methods=['GET'])
-def get_data_asset():
+def get_raw_asset():
     asset_name = request.args.get('asset')
+    print(asset_name, flush=True)
     asset_type = request.args.get('type')
-    print(asset_type, flush=True)
+
     if asset_type == 'csv':
         data = read_csv_data(asset_name)
     elif asset_type == 'excel':
         data = read_excel_data(asset_name)
     data_dict, summary = prepare_dataframe_for_return(data)
     return {'data_dict': data_dict, 'summary': summary}
+
+@app.route('/save-user-file', methods=['POST'])
+def save_user_file():
+    user_id = request.form['user_id']
+    file = request.files.get('file_input')
+
+    directory = os.path.join('raw_assets/user_assets/', user_id)
+    create_directory_if_not_exists(directory)
+
+    path = os.path.join(directory, file.filename)
+    file.save(path)
+
+    return path
 
 def create_id(type):
     return type + '-' + ''.join(random.choice('1234567890abcdefghijklmnopqrstuvwxyz') for i in range(13))
@@ -44,7 +59,15 @@ def create_directory_if_not_exists(directory):
         os.makedirs(directory, exist_ok=True)
 
 def read_csv_data(data_ref):
-    return pd.read_csv(data_ref, encoding='utf-8', skipinitialspace=True)
+    try:
+        return pd.read_csv(data_ref, encoding='utf-8', quoting=csv.QUOTE_MINIMAL, skipinitialspace=True)
+    except Exception as e:
+        if 'Error tokenizing data. C error: EOF inside string starting at row' in str(e):
+            try:
+                # TODO: This is to correct a strange quoting error in csv files. We may want to manually strip out the extra quotes that are returned.
+                return pd.read_csv(data_ref, encoding='utf-8', quoting=csv.QUOTE_NONE, skipinitialspace=True)
+            except Exception as e:
+                raise(e)
 
 def read_excel_data(data_ref):
     return pd.read_excel(data_ref)
@@ -134,6 +157,20 @@ class ReGBlock:
         elif self.type == 'excel-file':
             if self.data_ref.split('/')[0] == 'raw_assets':
                 raw_data = read_excel_data(self.data_ref)
+                self.create_data_ref()
+                write_to_parquet(raw_data, self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(raw_data)
+            elif self.data_ref.split('/')[0] == 'model_assets':
+                data = read_parquet(self.data_ref)
+                self.data_dict, self.summary = prepare_dataframe_for_return(data)
+            return self.data_ref, self.data_dict, self.summary, None
+        elif self.type == 'upload-file':
+            if self.data_ref.split('/')[0] == 'raw_assets':
+                file_type = self.properties['file_type']
+                if file_type == 'csv':
+                    raw_data = read_csv_data(self.data_ref)
+                elif file_type == 'excel':
+                    raw_data = read_excel_data(self.data_ref)
                 self.create_data_ref()
                 write_to_parquet(raw_data, self.data_ref)
                 self.data_dict, self.summary = prepare_dataframe_for_return(raw_data)
