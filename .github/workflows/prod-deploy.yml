@@ -1,0 +1,27 @@
+name: Deploys main branch to server
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Restart Webserver, Server
+    runs-on: ubuntu-latest
+    steps:
+    - name: executing remote ssh commands using ssh key and password
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USERNAME }}
+        key: ${{ secrets.PROD_KEY }}
+        passphrase: ${{ secrets.PROD_PASSPHRASE }}
+        port: ${{ secrets.PROD_PORT }}
+        script: |
+          cd regrail/
+          git pull origin main
+          docker compose -f docker-compose.prod.yml -f docker-compose.yml build --no-cache webserver
+          docker compose -f docker-compose.prod.yml -f docker-compose.yml up -d webserver
+          docker compose -f docker-compose.prod.yml -f docker-compose.yml build --no-cache server
+          docker compose -f docker-compose.prod.yml -f docker-compose.yml up -d server
