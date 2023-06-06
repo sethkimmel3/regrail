@@ -1929,7 +1929,8 @@ $( document ).ready(function(){
         data_ref = data;
       },
       error: function(err) {
-        console.log("Error uploading file: " + err)
+        console.log("Error uploading file:")
+        console.log(err);
       }
     });
 
